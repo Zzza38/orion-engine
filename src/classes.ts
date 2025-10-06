@@ -101,8 +101,44 @@ export interface NeuralNetworkLayer {
 export interface NeuralNetworkModel {
     layers: NeuralNetworkLayer[];
 }
+// Loss
+export type NeuralNetworkLossType = "mse" | "mae" | "crossEntropy";
+export class Loss {
+    /** Mean Squared Error (good for regression) */
+    static mse(pred: number[], target: number[]) {
+        if (pred.length !== target.length) throw new Error("MSE: Shape mismatch");
+        let sum = 0;
+        for (let i = 0; i < pred.length; i++) {
+            const diff = pred[i] - target[i];
+            sum += diff * diff;
+        }
+        return sum / pred.length;
+    }
 
-export class NeuralNetwork {
+    /** Mean Absolute Error (less sensitive to outliers) */
+    static mae(pred: number[], target: number[]) {
+        if (pred.length !== target.length) throw new Error("MAE: Shape mismatch");
+        let sum = 0;
+        for (let i = 0; i < pred.length; i++) {
+            sum += Math.abs(pred[i] - target[i]);
+        }
+        return sum / pred.length;
+    }
+
+    /** Cross Entropy (for classification) */
+    static crossEntropy(pred: number[], target: number[]) {
+        if (pred.length !== target.length) throw new Error("CrossEntropy: Shape mismatch");
+        let loss = 0;
+        for (let i = 0; i < pred.length; i++) {
+            const p = Math.max(pred[i], 1e-9); // avoid log(0)
+            loss += -target[i] * Math.log(p);
+        }
+        return loss / pred.length;
+    }
+}
+
+export class
+NeuralNetwork {
     private model: NeuralNetworkModel = {
         layers: []
     };
@@ -136,7 +172,7 @@ export class NeuralNetwork {
 
     /**
      * Fixes the weight mappings with neurons, useful if a layer was inserted.
-     * Will delete weight values that are unused, and create more if needed (.fill(1))
+     * Will delete weight values that are unused and create more if needed (.fill(1))
      */
     fixWeights() {
         for (let layerIdx = 1; layerIdx < this.model.layers.length; layerIdx++) {
@@ -184,8 +220,8 @@ export class NeuralNetwork {
         }
     }
 
-    /** Run the neural network
-     *
+    /**
+     * Run the neural network
      * @param input - The number array to be inputted into the network
      */
     runNetwork(input: number[]): number[] {
@@ -239,6 +275,26 @@ export class NeuralNetwork {
         return this.model.layers[this.model.layers.length - 1].neurons.map(
             neuron => neuron.value
         );
+    }
+
+    /**
+     * Calculates the loss of the network given a target
+     * @param input - The input to the neural network
+     * @param target - The expected output
+     * @param type - The type of loss calculation (Default: MSE)
+     */
+    calculateLoss(input: number[], target: number[], type: "mse" | "mae" | "crossEntropy" = "mse") {
+        const predicted = this.runNetwork(input);
+        switch (type) {
+            case "mse":
+                return Loss.mse(predicted, target);
+            case "mae":
+                return Loss.mae(predicted, target);
+            case "crossEntropy":
+                return Loss.crossEntropy(predicted, target);
+            default:
+                throw new Error(`Unknown loss type: ${type}`);
+        }
     }
 
     /**
