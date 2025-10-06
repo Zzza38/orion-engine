@@ -1,0 +1,29 @@
+{
+  "name": "orion-engine",
+  "version": "0.0.1",
+  "description": "An ESM framework made for running neural networks.",
+  "keywords": [
+    "ai",
+    "ml",
+    "framework"
+  ],
+  "homepage": "https://github.com/Zzza38/orion-engine#readme",
+  "bugs": {
+    "url": "https://github.com/Zzza38/orion-engine/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zzza38/orion-engine.git"
+  },
+  "license": "Apache-2.0",
+  "author": "Zzza38",
+  "type": "module",
+  "main": "build/index.js",
+  "scripts": {
+    "test": "tsx src/index.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}

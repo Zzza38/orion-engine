@@ -1,0 +1,7 @@
+# Source
+src
+tsconfig.json
+
+# NPM stuff
+node_modules
+package_lock.json
