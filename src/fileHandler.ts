@@ -1,5 +1,5 @@
 import * as fs from "fs";
-import {NeuralNetwork, NeuralNetworkActivationFunction, NeuralNetworkLayer} from "./classes.js";
+import {NeuralNetwork, NeuralNetworkActivationFunction} from "./classes.js";
 
 export function loadNetwork(src: string): NeuralNetwork {
     const network = new NeuralNetwork(true);

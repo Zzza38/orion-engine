@@ -1,4 +1,3 @@
-import {NeuralNetwork} from "./classes.js";
 import {loadNetwork, writeNetwork} from "./fileHandler.js";
 
 const network = loadNetwork(`2:relu:2:swish
