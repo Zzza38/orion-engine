@@ -1,6 +1,6 @@
-import { NeuralNetwork } from "./classes.js";
+import {NeuralNetwork} from "./classes.js";
+import {loadNetwork, writeNetwork} from "./fileHandler.js";
 
-const network = new NeuralNetwork(true);
-network.addLayer(1);
-network.addLayer(1);
-console.log(network.runNetwork([2]));
+const network = loadNetwork(`2:relu:2:swish
+0.71:-0.2:0.19|-1.82:0.95:0.97`);
+console.log(writeNetwork(network));

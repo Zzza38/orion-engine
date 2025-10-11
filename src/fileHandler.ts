@@ -1,7 +1,7 @@
 import * as fs from "fs";
-import {NeuralNetwork, NeuralNetworkActivationFunction} from "./classes.js";
+import {NeuralNetwork, NeuralNetworkActivationFunction, NeuralNetworkLayer} from "./classes.js";
 
-export function loadModel(src: string): NeuralNetwork {
+export function loadNetwork(src: string): NeuralNetwork {
     const network = new NeuralNetwork(true);
     const [layerStructureString, weightsAndBiasesString] = src.split("\n");
 
@@ -51,10 +51,31 @@ export function loadModel(src: string): NeuralNetwork {
     return network;
 }
 
-export function loadModelFromFile(path: string): NeuralNetwork {
+export function loadNetworkFromFile(path: string): NeuralNetwork {
     if (!fs.existsSync(path)) throw new Error("File does not exist");
     const src = fs.readFileSync(path).toString();
-    return loadModel(src);
+    return loadNetwork(src);
 }
 
-// TODO: Add support to take a NeuralNetwork and write a file that represents the NeuralNetwork
+export function writeNetwork(network: NeuralNetwork) {
+    const layers = network.layers;
+    let stringifiedModel = "";
+    for (const layer of layers) {
+        stringifiedModel += `${layer.neurons.length}:${layer.activation}:`;
+    }
+    stringifiedModel = stringifiedModel.slice(0, -1) + "\n";
+    for (const layer of layers) {
+        for (const neuron of layer.neurons) {
+            if (neuron.weights.length === 0) continue;
+            neuron.weights.forEach(weight => stringifiedModel += `${weight}:`);
+            stringifiedModel += neuron.bias + '|';
+        }
+    }
+    return stringifiedModel.slice(0, -1);
+}
+
+export function writeNetworkToFile(network: NeuralNetwork, path: string): boolean {
+    const src = writeNetwork(network);
+    fs.writeFileSync(path, src);
+    return fs.readFileSync(path).toString() === src;
+}
