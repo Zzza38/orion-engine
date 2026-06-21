@@ -1,5 +1,5 @@
 {
-  "name": "orion-engine",
+  "name": "@zzza38/orion-engine",
   "version": "0.0.2",
   "description": "An ESM framework made for running neural networks.",
   "keywords": [
@@ -29,6 +29,9 @@
   "files": [
     "build"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsx examples/xor.ts",

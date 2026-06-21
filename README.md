@@ -5,13 +5,13 @@ Orion Engine is an ESM neural network framework for Node.js.
 ## Install
 
 ```bash
-pnpm add orion-engine
+pnpm add @zzza38/orion-engine
 ```
 
 ## Usage
 
 ```typescript
-import { NeuralNetwork, writeNetworkToFile, loadNetworkFromFile } from "orion-engine";
+import { NeuralNetwork, writeNetworkToFile, loadNetworkFromFile } from "@zzza38/orion-engine";
 
 const network = new NeuralNetwork();
 network.addLayer(2, "linear");
@@ -38,6 +38,7 @@ const loaded = loadNetworkFromFile("model.onn");
 pnpm install
 pnpm dev    # run XOR training + save/load demo
 pnpm build  # compile to build/
+pnpm test   # run tests
 ```
 
 See [docs/files.md](docs/files.md) for the `.onn` model file format.
