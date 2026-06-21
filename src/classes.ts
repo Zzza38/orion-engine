@@ -1,6 +1,7 @@
 // Neurons
 export interface NeuralNetworkNeuron {
     value: number;
+    preActivationValue: number;
     weights: number[];
     bias: number;
 }
@@ -88,6 +89,79 @@ export class Activation {
     }
 }
 
+export class ActivationDerivative {
+    static linear(x: number) {
+        return 1;
+    }
+
+    static sigmoid(x: number) {
+        const sig = Activation.sigmoid(x);
+        return sig * (1 - sig);
+    }
+
+    static tanh(x: number) {
+        const t = Activation.tanh(x);
+        return 1 - t * t;
+    }
+
+    static relu(x: number) {
+        return x > 0 ? 1 : 0;
+    }
+
+    static leakyRelu(x: number, alpha = 0.01) {
+        return x > 0 ? 1 : alpha;
+    }
+
+    static elu(x: number, alpha = 1.0) {
+        return x > 0 ? 1 : alpha * Math.exp(x);
+    }
+
+    static swish(x: number) {
+        const s = Activation.swish(x);
+        return s + (1 - s) * Activation.sigmoid(x);
+    }
+
+    static softmax(arr: number[]) {
+        // Calculate softmax output values (as in the base Activation.softmax)
+        const max = Math.max(...arr);
+        const exp = arr.map(v => Math.exp(v - max));
+        const sum = exp.reduce((acc, v) => acc + v, 0);
+        if (!Number.isFinite(sum) || sum <= 0) throw new Error("Softmax sum invalid");
+        const softmax = exp.map(v => v / sum);
+        // The derivative of softmax for a vector is a Jacobian matrix, but to match the output of regular softmax,
+        // we will return the element-wise (vector) derivative, i.e., the gradient for each element with respect to itself:
+        // grad_i = softmax_i * (1 - softmax_i)
+        return softmax.map(s => s * (1 - s));
+    }
+
+    static use(activation: NeuralNetworkActivationFunction, value: number | number[]): number | number[] {
+        if (activation === "softmax") {
+            if (!Array.isArray(value)) throw new Error("Softmax derivative requires array input");
+            return this.softmax(value);
+        }
+        if (Array.isArray(value)) return value.map(v => this.use(activation, v) as number);
+
+        switch (activation) {
+            case "linear":
+                return this.linear(value);
+            case "sigmoid":
+                return this.sigmoid(value);
+            case "tanh":
+                return this.tanh(value);
+            case "relu":
+                return this.relu(value);
+            case "leakyRelu":
+                return this.leakyRelu(value);
+            case "elu":
+                return this.elu(value);
+            case "swish":
+                return this.swish(value);
+            default:
+                throw new Error(`Unknown activation function: ${activation}`);
+        }
+    }
+}
+
 // Layers
 export type NeuralNetworkLayerType = "hidden";
 
@@ -135,10 +209,33 @@ export class Loss {
         }
         return loss / pred.length;
     }
+
+    /** dLoss/dPrediction for backpropagation */
+    static gradient(type: NeuralNetworkLossType, pred: number[], target: number[]): number[] {
+        if (pred.length !== target.length) throw new Error("Loss gradient: Shape mismatch");
+        const n = pred.length;
+        switch (type) {
+            case "mse":
+                return pred.map((p, i) => (2 * (p - target[i])) / n);
+            case "mae":
+                return pred.map((p, i) => {
+                    if (p > target[i]) return 1 / n;
+                    if (p < target[i]) return -1 / n;
+                    return 0;
+                });
+            case "crossEntropy":
+                return pred.map((p, i) => {
+                    const clamped = Math.max(p, 1e-9);
+                    return -target[i] / (clamped * n);
+                });
+            default:
+                throw new Error(`Unknown loss type: ${type}`);
+        }
+    }
 }
 
 export class
-NeuralNetwork {
+    NeuralNetwork {
     private model: NeuralNetworkModel = {
         layers: []
     };
@@ -160,10 +257,11 @@ NeuralNetwork {
             neurons: [],
             activation: activation
         };
-        layer.neurons = Array.from({length: neuronCount}, () => ({
+        layer.neurons = Array.from({ length: neuronCount }, () => ({
             value: 0,
+            preActivationValue: 0,
             weights: [],
-            bias: 0,
+            bias: (Math.random() - 0.5) * 0.2,
         }));
         this.model.layers.push(layer);
         this.fixWeights();
@@ -172,7 +270,7 @@ NeuralNetwork {
 
     /**
      * Fixes the weight mappings with neurons, useful if a layer was inserted.
-     * Will delete weight values that are unused and create more if needed (.fill(1))
+     * Will delete weight values that are unused and create more if needed (random init)
      */
     fixWeights() {
         for (let layerIdx = 1; layerIdx < this.model.layers.length; layerIdx++) {
@@ -180,14 +278,20 @@ NeuralNetwork {
             const lastLayer = this.model.layers[layerIdx - 1];
             if (!lastLayer || !lastLayer.neurons) continue;
 
+            const fanIn = lastLayer.neurons.length;
             for (const neuron of layer.neurons) {
-                // Trim extra weights
-                neuron.weights = neuron.weights.slice(0, lastLayer.neurons.length);
-                // Add missing weights
-                const diff = lastLayer.neurons.length - neuron.weights.length;
-                if (diff > 0) neuron.weights.push(...Array(diff).fill(1));
+                neuron.weights = neuron.weights.slice(0, fanIn);
+                const diff = fanIn - neuron.weights.length;
+                for (let i = 0; i < diff; i++) {
+                    neuron.weights.push(this.randomWeight(fanIn));
+                }
             }
         }
+    }
+
+    private randomWeight(fanIn: number): number {
+        const limit = Math.sqrt(6 / fanIn);
+        return (Math.random() * 2 - 1) * limit;
     }
 
     /**
@@ -268,6 +372,7 @@ NeuralNetwork {
                 throw new Error("Activation output shape mismatch.");
             }
             for (let i = 0; i < layer.neurons.length; i++) {
+                layer.neurons[i].preActivationValue = layer.neurons[i].value;
                 layer.neurons[i].value = activationResults[i];
             }
 
@@ -294,6 +399,158 @@ NeuralNetwork {
                 return Loss.crossEntropy(predicted, target);
             default:
                 throw new Error(`Unknown loss type: ${type}`);
+        }
+    }
+    private lossFromPredicted(predicted: number[], target: number[], type: NeuralNetworkLossType): number {
+        switch (type) {
+            case "mse":
+                return Loss.mse(predicted, target);
+            case "mae":
+                return Loss.mae(predicted, target);
+            case "crossEntropy":
+                return Loss.crossEntropy(predicted, target);
+            default:
+                throw new Error(`Unknown loss type: ${type}`);
+        }
+    }
+
+    private activationDerivativeAt(
+        activation: NeuralNetworkActivationFunction,
+        neuronIndex: number,
+        layerNeurons: NeuralNetworkNeuron[],
+    ): number {
+        if (activation === "softmax") {
+            const preActivations = layerNeurons.map(n => n.preActivationValue);
+            const derivs = ActivationDerivative.use("softmax", preActivations);
+            if (!Array.isArray(derivs)) throw new Error("Softmax derivative output shape mismatch.");
+            return derivs[neuronIndex];
+        }
+        const deriv = ActivationDerivative.use(activation, layerNeurons[neuronIndex].preActivationValue);
+        if (typeof deriv !== "number") throw new Error("Activation derivative output shape mismatch.");
+        return deriv;
+    }
+
+    private outputDeltas(
+        predicted: number[],
+        target: number[],
+        lossType: NeuralNetworkLossType,
+        outputLayer: NeuralNetworkLayer,
+    ): number[] {
+        if (lossType === "crossEntropy") {
+            const act = outputLayer.activation;
+            if (act === "sigmoid" || act === "softmax") {
+                return predicted.map((p, i) => (p - target[i]) / predicted.length);
+            }
+        }
+
+        const lossGrads = Loss.gradient(lossType, predicted, target);
+        return lossGrads.map((grad, i) =>
+            grad * this.activationDerivativeAt(outputLayer.activation, i, outputLayer.neurons)
+        );
+    }
+
+    private applyLayerUpdate(layerIdx: number, deltas: number[], learningRate: number) {
+        const layer = this.model.layers[layerIdx];
+        const prevLayer = this.model.layers[layerIdx - 1];
+
+        for (let j = 0; j < layer.neurons.length; j++) {
+            const neuron = layer.neurons[j];
+            const delta = deltas[j];
+            for (let i = 0; i < neuron.weights.length; i++) {
+                neuron.weights[i] -= learningRate * delta * prevLayer.neurons[i].value;
+            }
+            neuron.bias -= learningRate * delta;
+        }
+    }
+
+    /**
+     * Trains the network on a single example via backpropagation.
+     * @param input - The input to the neural network
+     * @param target - The expected output
+     * @param learningRate - How fast the network should learn (setting too high will cause instability)
+     * @param lossType - The loss function to optimize (default: MSE)
+     * @returns The loss after the forward pass
+     */
+    backpropagate(
+        input: number[],
+        target: number[],
+        learningRate: number,
+        lossType: NeuralNetworkLossType = "mse",
+    ): number {
+        const predicted = this.runNetwork(input);
+        const loss = this.lossFromPredicted(predicted, target, lossType);
+
+        const outputLayerIdx = this.model.layers.length - 1;
+        const outputLayer = this.model.layers[outputLayerIdx];
+        let deltas = this.outputDeltas(predicted, target, lossType, outputLayer);
+        this.applyLayerUpdate(outputLayerIdx, deltas, learningRate);
+
+        for (let layerIdx = outputLayerIdx - 1; layerIdx >= 1; layerIdx--) {
+            const layer = this.model.layers[layerIdx];
+            const nextLayer = this.model.layers[layerIdx + 1];
+            const newDeltas: number[] = [];
+
+            for (let j = 0; j < layer.neurons.length; j++) {
+                let error = 0;
+                for (let k = 0; k < nextLayer.neurons.length; k++) {
+                    error += deltas[k] * nextLayer.neurons[k].weights[j];
+                }
+                newDeltas.push(
+                    error * this.activationDerivativeAt(layer.activation, j, layer.neurons)
+                );
+            }
+
+            this.applyLayerUpdate(layerIdx, newDeltas, learningRate);
+            deltas = newDeltas;
+        }
+
+        return loss;
+    }
+
+    /**
+     * Trains the network over multiple epochs on a dataset.
+     * @param inputs - List of input vectors
+     * @param targets - List of expected output vectors (same length as inputs)
+     * @param epochs - How many times to iterate over the full dataset
+     * @param learningRate - How fast the network should learn
+     * @param lossType - The loss function to optimize (default: MSE)
+     * @returns The average loss across the dataset on the final epoch
+     */
+    train(
+        inputs: number[][],
+        targets: number[][],
+        epochs: number,
+        learningRate: number,
+        lossType: NeuralNetworkLossType = "mse",
+    ): number {
+        if (inputs.length !== targets.length) {
+            throw new Error("Train: inputs and targets must have the same length");
+        }
+        if (inputs.length === 0) {
+            throw new Error("Train: dataset cannot be empty");
+        }
+        if (epochs < 1) {
+            throw new Error("Train: epochs must be at least 1");
+        }
+
+        let avgLoss = 0;
+        const order = inputs.map((_, i) => i);
+        for (let epoch = 0; epoch < epochs; epoch++) {
+            this.shuffleInPlace(order);
+            let epochLoss = 0;
+            for (const i of order) {
+                epochLoss += this.backpropagate(inputs[i], targets[i], learningRate, lossType);
+            }
+            avgLoss = epochLoss / inputs.length;
+        }
+
+        return avgLoss;
+    }
+
+    private shuffleInPlace(indices: number[]) {
+        for (let i = indices.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [indices[i], indices[j]] = [indices[j], indices[i]];
         }
     }
 

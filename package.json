@@ -18,11 +18,25 @@
   "license": "Apache-2.0",
   "author": "Zzza38",
   "type": "module",
-  "main": "build/index.js",
+  "main": "./build/index.js",
+  "types": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./build/index.d.ts",
+      "import": "./build/index.js"
+    }
+  },
+  "files": [
+    "build"
+  ],
   "scripts": {
-    "test": "tsx src/index.ts"
+    "build": "tsc",
+    "dev": "tsx examples/xor.ts",
+    "prepublishOnly": "pnpm run build",
+    "test": "tsx --test tests/**/*.test.ts"
   },
   "devDependencies": {
+    "@types/node": "^25.5.0",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3"
   }

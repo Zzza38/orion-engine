@@ -1,5 +1,19 @@
-import {loadNetwork, writeNetwork} from "./fileHandler.js";
+export {
+    Activation,
+    ActivationDerivative,
+    Loss,
+    NeuralNetwork,
+    type NeuralNetworkActivationFunction,
+    type NeuralNetworkLayer,
+    type NeuralNetworkLayerType,
+    type NeuralNetworkLossType,
+    type NeuralNetworkModel,
+    type NeuralNetworkNeuron,
+} from "./classes.js";
 
-const network = loadNetwork(`2:relu:2:swish
-0.71:-0.2:0.19|-1.82:0.95:0.97`);
-console.log(writeNetwork(network));
+export {
+    loadNetwork,
+    loadNetworkFromFile,
+    writeNetwork,
+    writeNetworkToFile,
+} from "./fileHandler.js";

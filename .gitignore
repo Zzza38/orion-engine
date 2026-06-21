@@ -1,6 +1,8 @@
 # Build
 build
 
+# Examples
+examples/*.onn
+
 # NPM stuff
 node_modules
-package_lock.json
