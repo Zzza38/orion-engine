@@ -1,42 +1,41 @@
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import {
-    loadNetwork,
-    loadNetworkFromFile,
-    NeuralNetwork,
-    writeNetwork,
-    writeNetworkToFile,
-} from "../src/index.js";
+/**
+ * XOR: the smallest problem a linear model cannot solve, learned by a 2-8-1 network.
+ *
+ * Demonstrates the core workflow: build a Sequential model, compile it with a loss and an
+ * optimizer, fit it with progress logging, and predict.
+ *
+ *   npx tsx examples/xor.ts
+ *
+ * Expected output (seeded, so it is the same on every run): the model summary (33 parameters),
+ * a progress line every 100 epochs with the loss falling to about 0.0015 and accuracy 1.0000,
+ * then one line per input, e.g. `1 xor 0 = 0.998 → 1`, with every rounded prediction correct.
+ */
+import { dense, Sequential } from "../src/index.js";
 
-const modelPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "xor.onn");
+// The four XOR cases. Targets for a single sigmoid output can be a flat array: one value per sample.
+const x = [
+    [0, 0],
+    [0, 1],
+    [1, 0],
+    [1, 1],
+];
+const y = [0, 1, 1, 0];
 
-const inputs = [[0, 0], [0, 1], [1, 0], [1, 1]];
-const targets = [[0], [1], [1], [0]];
+// Two inputs → 8 tanh units → 1 sigmoid unit (a probability). The seed makes the run reproducible.
+const model = new Sequential({ inputSize: 2, seed: 42, name: "xor", layers: [dense(8, "tanh"), dense(1, "sigmoid")] });
 
-const network = new NeuralNetwork();
-network.addLayer(2, "linear");
-network.addLayer(4, "relu");
-network.addLayer(1, "sigmoid");
+// Binary cross-entropy ("bce") is the natural loss for a sigmoid output.
+model.compile({ loss: "bce", optimizer: { name: "adam", learningRate: 0.05 }, metrics: ["accuracy"] });
+console.log(model.summary());
+console.log();
 
-const loss = network.train(inputs, targets, 10000, 0.3, "crossEntropy");
-console.log("final avg loss:", loss.toFixed(4));
+// All four samples fit in one batch; `verbose: 100` logs every 100th epoch.
+model.fit(x, y, { epochs: 300, batchSize: 4, verbose: 100 });
+console.log();
 
-for (let i = 0; i < inputs.length; i++) {
-    const pred = network.runNetwork(inputs[i])[0];
-    console.log(`${inputs[i]} -> ${pred.toFixed(4)} (target ${targets[i]})`);
-}
-
-writeNetworkToFile(network, modelPath);
-console.log("\nsaved to", modelPath);
-
-const serialized = writeNetwork(network);
-const loaded = loadNetwork(serialized);
-const fromFile = loadNetworkFromFile(modelPath);
-
-for (const [label, model] of [["memory", loaded], ["file", fromFile]] as const) {
-    console.log(`\nloaded (${label}):`);
-    for (const input of inputs) {
-        const pred = model.runNetwork(input)[0];
-        console.log(`  ${input} -> ${pred.toFixed(4)}`);
-    }
+// predict() mirrors its input: number[][] in, number[][] out (one row per sample).
+const predictions = model.predict(x);
+for (const [i, [a, b]] of x.entries()) {
+    const p = predictions[i][0];
+    console.log(`${a} xor ${b} = ${p.toFixed(3)} → ${Math.round(p)}`);
 }

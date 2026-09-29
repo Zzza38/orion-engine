@@ -1,0 +1,16 @@
+{
+    "$schema": "https://json.schemastore.org/tsconfig",
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        // No DOM: the library must not depend on browser-only globals.
+        // Node types stay on for src/node.ts; tsconfig.browser.json guards the main entry against Node APIs.
+        "lib": ["ES2022"],
+        "rootDir": "src",
+        "outDir": "build",
+        "noEmit": false,
+        "declaration": true,
+        "declarationMap": true,
+        "sourceMap": true
+    },
+    "include": ["src"]
+}

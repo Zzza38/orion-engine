@@ -1,0 +1,71 @@
+{
+    "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+    "vcs": {
+        "enabled": true,
+        "clientKind": "git",
+        "useIgnoreFile": true,
+        "defaultBranch": "main"
+    },
+    "files": {
+        "includes": ["**", "!!**/build", "!!**/coverage", "!!docs/playground/dist", "!!.idea", "!pnpm-lock.yaml"]
+    },
+    "formatter": {
+        "enabled": true,
+        "indentStyle": "space",
+        "indentWidth": 4,
+        "lineWidth": 120,
+        "lineEnding": "lf"
+    },
+    "javascript": {
+        "formatter": {
+            "quoteStyle": "double",
+            "semicolons": "always",
+            "trailingCommas": "all",
+            "arrowParentheses": "always"
+        }
+    },
+    "linter": {
+        "enabled": true,
+        "rules": {
+            "preset": "recommended",
+            "style": {
+                "noNonNullAssertion": "off",
+                "noParameterAssign": "off",
+                "useExponentiationOperator": "off"
+            },
+            "suspicious": {
+                "noExplicitAny": "warn"
+            }
+        }
+    },
+    "assist": {
+        "enabled": true,
+        "actions": {
+            "source": {
+                "organizeImports": "on"
+            }
+        }
+    },
+    "overrides": [
+        {
+            "includes": ["docs/playground/**/*.css"],
+            "linter": {
+                "rules": {
+                    "style": {
+                        "noDescendingSpecificity": "off"
+                    }
+                }
+            }
+        },
+        {
+            "includes": ["tests/**", "bench/**", "examples/**"],
+            "linter": {
+                "rules": {
+                    "suspicious": {
+                        "noExplicitAny": "off"
+                    }
+                }
+            }
+        }
+    ]
+}

@@ -4,22 +4,118 @@ on:
   push:
     branches: [main, master]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test:
+  check:
+    name: Lint & typecheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
+      # pnpm version comes from the "packageManager" field in package.json.
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: "22"
-          cache: "pnpm"
+          node-version: 24
+          cache: pnpm
 
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test
-      - run: pnpm build
+
+      - name: Biome (format + lint)
+        run: pnpm exec biome ci .
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+  test:
+    name: Test (Node ${{ matrix.node }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        # 22 = maintenance LTS (engines floor), 24 = active LTS, 26 = current (LTS from Oct 2026).
+        node: [22, 24, 26]
+        include:
+          - os: ubuntu-latest
+            node: 24
+            coverage: true
+          - os: windows-latest
+            node: 24
+          - os: macos-latest
+            node: 24
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Test
+        if: ${{ !matrix.coverage }}
+        run: pnpm test
+
+      - name: Test with coverage
+        if: ${{ matrix.coverage }}
+        run: pnpm run test:coverage
+
+      # Once, on the Linux / active-LTS leg: every example must still run.
+      - name: Examples
+        if: ${{ matrix.coverage }}
+        run: pnpm examples
+
+  build:
+    name: Build & package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build library
+        run: pnpm run build
+
+      - name: Lint package (publint + are-the-types-wrong)
+        run: pnpm run pack:check
+
+      - name: Smoke-test the packed tarball
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="$(mktemp -d)"
+          pnpm pack --pack-destination "$dir"
+          cd "$dir"
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund ./*.tgz
+          node --input-type=module -e "
+            const core = await import('@zzza38/orion-engine');
+            const node = await import('@zzza38/orion-engine/node');
+            if (Object.keys(core).length === 0) throw new Error('main entry has no exports');
+            if (Object.keys(node).length === 0) throw new Error('node entry has no exports');
+            console.log('main exports:', Object.keys(core).join(', '));
+            console.log('node exports:', Object.keys(node).join(', '));
+          "
+
+      - name: Build playground
+        run: pnpm run playground:build

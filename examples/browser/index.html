@@ -1,0 +1,70 @@
+<!doctype html>
+<!--
+    Orion Engine in the browser, with no build step: the library is imported as an ES module from
+    a CDN, trains XOR with fitAsync (so the page stays responsive), and prints the predictions.
+
+    Open this file directly in a modern browser (or serve the folder with any static server).
+    The CDN URL points at the published npm package, so it only works once
+    @zzza38/orion-engine@0.1.0 is on npm. Alternatives:
+      https://cdn.jsdelivr.net/npm/@zzza38/orion-engine@0.1.0/+esm
+      https://unpkg.com/@zzza38/orion-engine@0.1.0/build/index.js
+
+    Expected output: "Training…", a line every 50 epochs with the loss falling, then the four XOR
+    predictions (≈ 0, 1, 1, 0).
+-->
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Orion Engine: XOR in the browser</title>
+        <style>
+            body {
+                font: 15px/1.5 system-ui, sans-serif;
+                max-width: 40rem;
+                margin: 2rem auto;
+                padding: 0 1rem;
+            }
+            pre {
+                background: #f4f4f5;
+                padding: 1rem;
+                border-radius: 8px;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>XOR in the browser</h1>
+        <p>A 2-8-1 network trained with <code>fitAsync</code>, entirely client-side.</p>
+        <pre id="log">Loading…</pre>
+        <script type="module">
+            import { dense, Sequential } from "https://esm.sh/@zzza38/orion-engine@0.1.0";
+
+            const log = document.querySelector("#log");
+            const print = (line) => (log.textContent += `${line}\n`);
+            log.textContent = "Training…\n";
+
+            const x = [
+                [0, 0],
+                [0, 1],
+                [1, 0],
+                [1, 1],
+            ];
+            const y = [0, 1, 1, 0];
+
+            const model = new Sequential({ inputSize: 2, seed: 42, layers: [dense(8, "tanh"), dense(1, "sigmoid")] });
+            model.compile({ loss: "bce", optimizer: { name: "adam", learningRate: 0.05 }, metrics: ["accuracy"] });
+
+            // fitAsync yields to the browser between batches, so the page can repaint while it trains.
+            await model.fitAsync(x, y, {
+                epochs: 300,
+                batchSize: 4,
+                onEpochEnd: (epoch, logs) => {
+                    if ((epoch + 1) % 50 === 0) print(`epoch ${epoch + 1}: loss ${logs.loss.toFixed(4)}`);
+                },
+            });
+
+            for (const [row, [p]] of x.map((row) => [row, model.predict(row)])) {
+                print(`${row[0]} xor ${row[1]} = ${p.toFixed(3)}`);
+            }
+        </script>
+    </body>
+</html>

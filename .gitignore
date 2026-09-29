@@ -1,8 +1,19 @@
 # Build
 build
 
-# Examples
-examples/*.onn
+# Coverage
+coverage
+
+# Playground bundle (built in CI for GitHub Pages)
+docs/playground/dist
+
+# Examples / saved models
+examples/**/*.onn
+examples/**/*.onn.json
 
 # NPM stuff
 node_modules
+*.tgz
+
+# OS / editor
+.DS_Store

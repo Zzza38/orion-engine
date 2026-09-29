@@ -1,0 +1,2 @@
+# Normalize line endings so Biome's LF check passes on every OS (incl. Windows CI).
+* text=auto eol=lf
