@@ -89,9 +89,12 @@ export class BufferCache<T> {
 /** Validates a user-supplied layer name. Empty means "let the model name it". */
 export function checkLayerName(where: string, name: unknown): string {
     if (name === undefined) return "";
-    if (typeof name !== "string") throw new ValidationError(`${where}: "name" must be a string, got ${describeValue(name)}`);
+    if (typeof name !== "string")
+        throw new ValidationError(`${where}: "name" must be a string, got ${describeValue(name)}`);
     if (name.includes("/")) {
-        throw new ValidationError(`${where}: layer name ${JSON.stringify(name)} must not contain "/" (used in weight names)`);
+        throw new ValidationError(
+            `${where}: layer name ${JSON.stringify(name)} must not contain "/" (used in weight names)`,
+        );
     }
     return name;
 }
@@ -143,7 +146,9 @@ export abstract class BaseLayer implements Layer {
      */
     build(inputSize: number, rng: Random): void {
         if (!Number.isInteger(inputSize) || inputSize < 1) {
-            throw new ValidationError(`${this.label}: input size must be a positive integer, got ${describeValue(inputSize)}`);
+            throw new ValidationError(
+                `${this.label}: input size must be a positive integer, got ${describeValue(inputSize)}`,
+            );
         }
         if (this.isBuilt) {
             if (inputSize === this.builtInputSize) return;
@@ -196,7 +201,10 @@ export abstract class BaseLayer implements Layer {
             throw new ValidationError(`${this.label}: forward() expects a Matrix, got ${describeValue(input)}`);
         }
         if (input.cols !== this.builtInputSize) {
-            throw new ShapeError(`${this.label} expected input with ${this.builtInputSize} features, got ${input.cols}`);
+            const n = this.builtInputSize;
+            throw new ShapeError(
+                `${this.label} expected input with ${n} feature${n === 1 ? "" : "s"}, got ${input.cols}`,
+            );
         }
     }
 

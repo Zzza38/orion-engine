@@ -2,16 +2,16 @@
  * The {@link Sequential} model: a linear stack of layers with Keras-style compile / fit /
  * predict / evaluate, seeded and reproducible, in Node.js and the browser.
  */
-import { History, progressLogger } from "./callbacks.js";
+
 import type { Callback, CallbackContext, Logs } from "./callbacks.js";
+import { History, progressLogger } from "./callbacks.js";
 import { ShapeError, TrainingError, ValidationError } from "./core/errors.js";
-import { gatherRows, Matrix } from "./core/matrix.js";
 import type { MatrixLike } from "./core/matrix.js";
+import { gatherRows, Matrix } from "./core/matrix.js";
 import { Random } from "./core/random.js";
 import type {
     JsonValue,
     Layer,
-    LayerConfig,
     Loss,
     LossIdentifier,
     Metric,
@@ -24,6 +24,7 @@ import type {
     WeightEntry,
 } from "./core/types.js";
 import { validateArtifact } from "./io/validate.js";
+import { ActivationLayer } from "./layers/activation.js";
 import { BufferCache, isBaseLayer } from "./layers/base.js";
 import { Dense } from "./layers/dense.js";
 import { layerFromConfig } from "./layers/index.js";
@@ -113,7 +114,16 @@ export interface BatchOptions {
     batchSize?: number;
 }
 
-const FIT_KEYS = ["epochs", "batchSize", "shuffle", "validationSplit", "validationData", "callbacks", "onEpochEnd", "verbose"];
+const FIT_KEYS = [
+    "epochs",
+    "batchSize",
+    "shuffle",
+    "validationSplit",
+    "validationData",
+    "callbacks",
+    "onEpochEnd",
+    "verbose",
+];
 const FIT_ASYNC_KEYS = [...FIT_KEYS, "signal", "yieldEvery"];
 const HOOKS = ["onTrainBegin", "onEpochBegin", "onBatchEnd", "onEpochEnd", "onTrainEnd"] as const;
 type Hook = (typeof HOOKS)[number];
@@ -164,6 +174,8 @@ export class Sequential {
     /** Flattened parameters, rebuilt lazily after layers change. */
     private paramCache: Parameter[] | null = null;
     private regularizedLayers: Regularized[] = [];
+    /** True while a fit/fitAsync call is running. */
+    private isTraining = false;
 
     /**
      * @example
@@ -178,12 +190,16 @@ export class Sequential {
         this.rng = new Random(options.seed);
         this.seed = this.rng.seed;
         if (options.name !== undefined && (typeof options.name !== "string" || options.name.length === 0)) {
-            throw new ValidationError(`${where}: "name" must be a non-empty string, got ${describeValue(options.name)}`);
+            throw new ValidationError(
+                `${where}: "name" must be a non-empty string, got ${describeValue(options.name)}`,
+            );
         }
         this.name = options.name ?? "sequential";
         if (options.layers !== undefined) {
             if (!Array.isArray(options.layers)) {
-                throw new ValidationError(`${where}: "layers" must be an array of layers, got ${describeValue(options.layers)}`);
+                throw new ValidationError(
+                    `${where}: "layers" must be an array of layers, got ${describeValue(options.layers)}`,
+                );
             }
             for (const layer of options.layers) this.add(layer);
         }
@@ -251,7 +267,9 @@ export class Sequential {
      */
     add(layer: Layer): this {
         if (!isLayer(layer)) {
-            throw new ValidationError(`add() expects a layer, e.g. model.add(dense(8, "relu")), got ${describeValue(layer)}`);
+            throw new ValidationError(
+                `add() expects a layer, e.g. model.add(dense(8, "relu")), got ${describeValue(layer)}`,
+            );
         }
         if (this.layerList.includes(layer)) {
             throw new ValidationError(`Layer "${layer.name}" is already in this model; create a new layer instead`);
@@ -279,7 +297,9 @@ export class Sequential {
         positiveInteger("build", "inputSize", inputSize);
         if (this.builtInputSize !== undefined) {
             if (this.builtInputSize === inputSize) return this;
-            throw new ShapeError(`Model "${this.name}" is already built for inputSize ${this.builtInputSize}; got ${inputSize}`);
+            throw new ShapeError(
+                `Model "${this.name}" is already built for inputSize ${this.builtInputSize}; got ${inputSize}`,
+            );
         }
         let size = inputSize;
         for (const layer of this.layerList) {
@@ -310,13 +330,17 @@ export class Sequential {
     compile(options: CompileOptions): this {
         checkOptions("compile", options, ["loss", "optimizer", "metrics"]);
         if (options === undefined || options.loss === undefined) {
-            throw new ValidationError(`compile: "loss" is required, e.g. model.compile({ loss: "mse", optimizer: "adam" })`);
+            throw new ValidationError(
+                `compile: "loss" is required, e.g. model.compile({ loss: "mse", optimizer: "adam" })`,
+            );
         }
         const loss = getLoss(options.loss);
         const optimizer = getOptimizer(options.optimizer ?? "adam");
         const metricIds = options.metrics ?? [];
         if (!Array.isArray(metricIds)) {
-            throw new ValidationError(`compile: "metrics" must be an array, e.g. ["accuracy"], got ${describeValue(metricIds)}`);
+            throw new ValidationError(
+                `compile: "metrics" must be an array, e.g. ["accuracy"], got ${describeValue(metricIds)}`,
+            );
         }
         const metrics = metricIds.map((id) => getMetric(id));
         const seen = new Set<string>();
@@ -365,10 +389,20 @@ export class Sequential {
     async fitAsync(x: MatrixLike, y: MatrixLike, options: FitAsyncOptions = {}): Promise<History> {
         checkOptions("fitAsync", options, FIT_ASYNC_KEYS);
         const signal = options.signal;
-        if (signal !== undefined && (signal === null || typeof signal !== "object" || typeof signal.aborted !== "boolean")) {
+        if (
+            signal !== undefined &&
+            (signal === null || typeof signal !== "object" || typeof signal.aborted !== "boolean")
+        ) {
             throw new ValidationError(`fitAsync: "signal" must be an AbortSignal, got ${describeValue(signal)}`);
         }
-        const yieldEvery = numberOption("fitAsync", "yieldEvery", options.yieldEvery, 16, "a finite number >= 0", (v) => v >= 0);
+        const yieldEvery = numberOption(
+            "fitAsync",
+            "yieldEvery",
+            options.yieldEvery,
+            16,
+            "a finite number >= 0",
+            (v) => v >= 0,
+        );
         signal?.throwIfAborted();
         const plan = this.prepareFit("fitAsync", x, y, options as FitOptions, FIT_ASYNC_KEYS, true, signal);
         const loop = this.trainLoop(plan);
@@ -378,7 +412,7 @@ export class Sequential {
             const value = step.value;
             if (value === TICK) {
                 if (now() - lastYield >= yieldEvery) {
-                    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+                    await yieldToEventLoop();
                     lastYield = now();
                 }
                 step = loop.next();
@@ -493,14 +527,17 @@ export class Sequential {
                 `${where}: the model is not built yet; pass inputSize to the constructor or call build(inputSize) first`,
             );
         }
-        if (!Array.isArray(entries)) throw new ValidationError(`${where}: expected an array of weight entries, got ${describeValue(entries)}`);
+        if (!Array.isArray(entries))
+            throw new ValidationError(`${where}: expected an array of weight entries, got ${describeValue(entries)}`);
         const params = this.parameterList();
         const byName = new Map(params.map((p) => [p.name, p]));
         const updates: [Parameter, WeightEntry][] = [];
         const seen = new Set<string>();
         for (const entry of entries) {
             if (entry === null || typeof entry !== "object") {
-                throw new ValidationError(`${where}: expected weight entries { name, shape, data }, got ${describeValue(entry)}`);
+                throw new ValidationError(
+                    `${where}: expected weight entries { name, shape, data }, got ${describeValue(entry)}`,
+                );
             }
             const param = byName.get(entry.name);
             if (param === undefined) {
@@ -525,13 +562,16 @@ export class Sequential {
             }
             for (let i = 0; i < data.length; i++) {
                 if (typeof data[i] !== "number" || !Number.isFinite(data[i])) {
-                    throw new ValidationError(`${where}: weight "${entry.name}"[${i}] is ${describeValue(data[i])}; weights must be finite numbers`);
+                    throw new ValidationError(
+                        `${where}: weight "${entry.name}"[${i}] is ${describeValue(data[i])}; weights must be finite numbers`,
+                    );
                 }
             }
             updates.push([param, entry]);
         }
         const missing = params.filter((p) => !seen.has(p.name)).map((p) => p.name);
-        if (missing.length > 0) throw new ValidationError(`${where}: missing weight(s) ${missing.map((n) => `"${n}"`).join(", ")}`);
+        if (missing.length > 0)
+            throw new ValidationError(`${where}: missing weight(s) ${missing.map((n) => `"${n}"`).join(", ")}`);
         for (const [param, entry] of updates) param.value.data.set(entry.data);
     }
 
@@ -661,7 +701,8 @@ export class Sequential {
             for (const layer of this.layerList) {
                 if (layer.built) params.push(...layer.parameters());
                 const candidate = layer as Partial<Regularized>;
-                if (typeof candidate.regularizationLoss === "function") regularized.push(layer as unknown as Regularized);
+                if (typeof candidate.regularizationLoss === "function")
+                    regularized.push(layer as unknown as Regularized);
             }
             this.paramCache = params;
             this.regularizedLayers = regularized;
@@ -718,7 +759,9 @@ export class Sequential {
     /** Converts inputs to a Matrix, builds the model on first use, and checks the feature count. */
     private toInputs(x: MatrixLike, where: string, label: string): Matrix {
         if (this.layerList.length === 0) {
-            throw new ValidationError(`${where}: the model has no layers; add some with model.add(dense(units, activation))`);
+            throw new ValidationError(
+                `${where}: the model has no layers; add some with model.add(dense(units, activation))`,
+            );
         }
         const matrix = toMatrix(x, where, label);
         if (this.builtInputSize === undefined) {
@@ -726,7 +769,14 @@ export class Sequential {
             this.build(matrix.cols);
         }
         if (matrix.cols !== this.builtInputSize) {
-            throw new ShapeError(`Expected input with ${this.builtInputSize} features (inputSize), got ${matrix.cols}`);
+            const expected = this.builtInputSize;
+            const hint =
+                expected === 1 && Array.isArray(x) && !Array.isArray(x[0])
+                    ? ". A flat array is one sample; pass one row per sample instead, e.g. [[0.1], [0.2], [0.3]]"
+                    : "";
+            throw new ShapeError(
+                `Expected input with ${expected} feature${expected === 1 ? "" : "s"} (inputSize), got ${matrix.cols}${hint}`,
+            );
         }
         return matrix;
     }
@@ -741,7 +791,9 @@ export class Sequential {
             matrix = toMatrix(y, where, label);
         }
         if (matrix.rows !== rows) {
-            throw new ShapeError(`${where}: x and ${label} must have the same number of samples, got ${rows} and ${matrix.rows}`);
+            throw new ShapeError(
+                `${where}: x and ${label} must have the same number of samples, got ${rows} and ${matrix.rows}`,
+            );
         }
         return matrix;
     }
@@ -793,6 +845,12 @@ export class Sequential {
     ): FitPlan {
         checkOptions(where, options, allowedKeys);
         this.requireCompiled(where);
+        if (this.isTraining) {
+            throw new ValidationError(
+                `${where}: this model is already training (another fit/fitAsync call is in progress); ` +
+                    "await it first, or end it early with ctx.stopTraining() from a callback",
+            );
+        }
         const epochs = positiveInteger(where, "epochs", options.epochs, 1);
         const batchSize = positiveInteger(where, "batchSize", options.batchSize, 32);
         const shuffle = booleanOption(where, "shuffle", options.shuffle, true);
@@ -808,7 +866,9 @@ export class Sequential {
         if (options.validationData !== undefined) {
             const data = options.validationData;
             if (!Array.isArray(data) || data.length !== 2) {
-                throw new ValidationError(`${where}: "validationData" must be a pair [x, y], got ${describeValue(data)}`);
+                throw new ValidationError(
+                    `${where}: "validationData" must be a pair [x, y], got ${describeValue(data)}`,
+                );
             }
             valX = this.toInputs(data[0], where, "validationData x");
             valY = this.toTargets(data[1], valX.rows, where, "validationData y");
@@ -817,7 +877,14 @@ export class Sequential {
             this.checkTargets(valY, where, "validationData y");
             if (valX.rows === 0) valX = valY = null;
         } else if (options.validationSplit !== undefined) {
-            const split = numberOption(where, "validationSplit", options.validationSplit, 0, "a number in (0, 1)", (v) => v > 0 && v < 1);
+            const split = numberOption(
+                where,
+                "validationSplit",
+                options.validationSplit,
+                0,
+                "a number in (0, 1)",
+                (v) => v > 0 && v < 1,
+            );
             const valCount = Math.floor(inputs.rows * split);
             const trainCount = inputs.rows - valCount;
             if (valCount === 0 || trainCount === 0) {
@@ -836,18 +903,23 @@ export class Sequential {
         const callbacks: Callback[] = [];
         if (options.callbacks !== undefined) {
             if (!Array.isArray(options.callbacks)) {
-                throw new ValidationError(`${where}: "callbacks" must be an array, got ${describeValue(options.callbacks)}`);
+                throw new ValidationError(
+                    `${where}: "callbacks" must be an array, got ${describeValue(options.callbacks)}`,
+                );
             }
             for (const cb of options.callbacks) {
                 if (cb === null || typeof cb !== "object") {
-                    throw new ValidationError(`${where}: every callback must be an object with hooks such as onEpochEnd, got ${describeValue(cb)}`);
+                    throw new ValidationError(
+                        `${where}: every callback must be an object with hooks such as onEpochEnd, got ${describeValue(cb)}`,
+                    );
                 }
                 callbacks.push(cb);
             }
         }
         if (options.onEpochEnd !== undefined) {
             const fn = options.onEpochEnd;
-            if (typeof fn !== "function") throw new ValidationError(`${where}: "onEpochEnd" must be a function, got ${describeValue(fn)}`);
+            if (typeof fn !== "function")
+                throw new ValidationError(`${where}: "onEpochEnd" must be a function, got ${describeValue(fn)}`);
             callbacks.push({ onEpochEnd: (epoch, logs) => fn(epoch, logs) });
         }
         const verbose = options.verbose;
@@ -863,6 +935,15 @@ export class Sequential {
      * results (to be awaited) and TICK after every batch; in sync mode it never yields.
      */
     private *trainLoop(plan: FitPlan): Generator<unknown, History, unknown> {
+        this.isTraining = true;
+        try {
+            return yield* this.runEpochs(plan);
+        } finally {
+            this.isTraining = false;
+        }
+    }
+
+    private *runEpochs(plan: FitPlan): Generator<unknown, History, unknown> {
         const { x, y, valX, valY, epochs, batchSize, callbacks, signal } = plan;
         const optimizer = this.optimizerInstance as Optimizer;
         const metrics = this.metricList;
@@ -919,7 +1000,12 @@ export class Sequential {
                 const batchIndices = indices.subarray(from, to);
                 gatherRows(x, batchIndices, b.x);
                 gatherRows(y, batchIndices, b.y);
-                const { loss, prediction } = this.trainStep(b.x, b.y, b.grad, `at epoch ${epoch + 1}/${epochs}, batch ${batch + 1}/${steps}`);
+                const { loss, prediction } = this.trainStep(
+                    b.x,
+                    b.y,
+                    b.grad,
+                    `at epoch ${epoch + 1}/${epochs}, batch ${batch + 1}/${steps}`,
+                );
                 lossSum += loss * size;
                 let batchLogs: Logs | null = onBatchEnd.length > 0 ? { loss, size } : null;
                 for (let m = 0; m < metrics.length; m++) {
@@ -942,7 +1028,8 @@ export class Sequential {
             }
             if (valX !== null && valY !== null) {
                 const valLogs = this.evaluateMatrices(valX, valY, batchSize);
-                for (const key of Object.keys(valLogs)) logs[`val${key.charAt(0).toUpperCase()}${key.slice(1)}`] = valLogs[key];
+                for (const key of Object.keys(valLogs))
+                    logs[`val${key.charAt(0).toUpperCase()}${key.slice(1)}`] = valLogs[key];
             }
             logs.learningRate = optimizer.learningRate;
             logs.durationMs = now() - start;
@@ -956,7 +1043,12 @@ export class Sequential {
     }
 
     /** One optimizer step on a batch. Returns the pre-update loss and the batch predictions. */
-    private trainStep(x: Matrix, y: Matrix, gradBuffer: Matrix | null, where: string): { loss: number; prediction: Matrix } {
+    private trainStep(
+        x: Matrix,
+        y: Matrix,
+        gradBuffer: Matrix | null,
+        where: string,
+    ): { loss: number; prediction: Matrix } {
         const layers = this.layerList;
         const loss = this.lossFn as Loss;
         const optimizer = this.optimizerInstance as Optimizer;
@@ -978,11 +1070,20 @@ export class Sequential {
         let grad: Matrix | null = null;
         let next = last;
         const lastLayer = layers[last];
-        if (lastLayer instanceof Dense && typeof loss.fusedGradient === "function") {
-            const dz = loss.fusedGradient(lastLayer.activation.name, output, y, out);
-            if (dz !== null) {
-                grad = lastLayer.propagateFromPreActivation(dz, last > 0);
-                next = last - 1;
+        if (typeof loss.fusedGradient === "function") {
+            // Closed-form dL/dz for sigmoid + bce and softmax + (s)cce: faster and stabler.
+            if (lastLayer instanceof Dense) {
+                const dz = loss.fusedGradient(lastLayer.activation.name, output, y, out);
+                if (dz !== null) {
+                    grad = lastLayer.propagateFromPreActivation(dz, last > 0);
+                    next = last - 1;
+                }
+            } else if (lastLayer instanceof ActivationLayer) {
+                const dz = loss.fusedGradient(lastLayer.activation.name, output, y, out);
+                if (dz !== null) {
+                    grad = dz; // dL/d(activation input) is exactly the fused gradient
+                    next = last - 1;
+                }
             }
         }
         if (next === last) grad = loss.gradient(output, y, out);
@@ -1038,8 +1139,20 @@ export class Sequential {
 // Helpers
 // ---------------------------------------------------------------------------------------------
 
+/** Lets timers, rendering and abort events run: `scheduler.yield()` where available, else a 0 ms timeout. */
+function yieldToEventLoop(): Promise<void> {
+    const scheduler = (globalThis as { scheduler?: { yield?: () => Promise<void> } }).scheduler;
+    if (typeof scheduler?.yield === "function") return scheduler.yield();
+    return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 /** Calls `hook` on each callback; yields returned promises in async mode, rejects them in sync mode. */
-function* invoke(plan: FitPlan, hook: Hook, callbacks: readonly Callback[], args: unknown[]): Generator<unknown, void, unknown> {
+function* invoke(
+    plan: FitPlan,
+    hook: Hook,
+    callbacks: readonly Callback[],
+    args: unknown[],
+): Generator<unknown, void, unknown> {
     for (const cb of callbacks) {
         const fn = cb[hook] as (...a: unknown[]) => unknown;
         const result = fn.apply(cb, args);

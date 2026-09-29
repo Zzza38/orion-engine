@@ -41,7 +41,9 @@ function spiral(perClass: number, classes: number, rng: Random): { x: number[][]
 /** Random regression-ish data. */
 function randomData(rng: Random, rows: number, inputs: number, outputs: number): { x: number[][]; y: number[][] } {
     const x = Array.from({ length: rows }, () => Array.from({ length: inputs }, () => rng.uniform(-1, 1)));
-    const y = x.map((row) => Array.from({ length: outputs }, (_, j) => Math.sin(row[0] * (j + 1)) + row[inputs - 1] * 0.5));
+    const y = x.map((row) =>
+        Array.from({ length: outputs }, (_, j) => Math.sin(row[0] * (j + 1)) + row[inputs - 1] * 0.5),
+    );
     return { x, y };
 }
 
@@ -61,7 +63,9 @@ describe("Sequential: training", () => {
         const history = model.fit(XOR_X, XOR_Y, { epochs: 300, batchSize: 4 });
         const elapsed = performance.now() - start;
         const predictions = model.predict(XOR_X).map((row) => row[0]);
-        predictions.forEach((p, i) => assert.ok(Math.abs(p - XOR_Y[i]) < 0.1, `XOR ${XOR_X[i]} -> ${p}`));
+        predictions.forEach((p, i) => {
+            assert.ok(Math.abs(p - XOR_Y[i]) < 0.1, `XOR ${XOR_X[i]} -> ${p}`);
+        });
         assert.equal(history.last("accuracy"), 1);
         assert.ok(elapsed < 2000, `took ${elapsed} ms`);
         // Same seed, same result: bit for bit.
@@ -72,7 +76,11 @@ describe("Sequential: training", () => {
 
     it("classifies a 3-class spiral with softmax + sparse categorical cross-entropy (> 90%)", () => {
         const { x, y } = spiral(100, 3, new Random(3));
-        const model = new Sequential({ inputSize: 2, seed: 7, layers: [dense(32, "relu"), dense(32, "relu"), dense(3, "softmax")] });
+        const model = new Sequential({
+            inputSize: 2,
+            seed: 7,
+            layers: [dense(32, "relu"), dense(32, "relu"), dense(3, "softmax")],
+        });
         model.compile({ loss: "scce", optimizer: { name: "adam", learningRate: 0.02 }, metrics: ["accuracy"] });
         model.fit(x, y, { epochs: 150, batchSize: 32 });
         const { accuracy } = model.evaluate(x, y);
@@ -87,7 +95,11 @@ describe("Sequential: training", () => {
             x.push([v]);
             y.push(Math.sin(v));
         }
-        const model = new Sequential({ inputSize: 1, seed: 1, layers: [dense(32, "tanh"), dense(32, "tanh"), dense(1)] });
+        const model = new Sequential({
+            inputSize: 1,
+            seed: 1,
+            layers: [dense(32, "tanh"), dense(32, "tanh"), dense(1)],
+        });
         model.compile({ loss: "mse", optimizer: { name: "adam", learningRate: 0.01 }, metrics: ["mae", "rmse"] });
         const history = model.fit(x, y, { epochs: 200, batchSize: 32 });
         const logs = model.evaluate(x, y);
@@ -144,7 +156,21 @@ describe("Sequential: training", () => {
         const before = weightsOf(model);
         const logs = model.trainOnBatch(XOR_X, XOR_Y);
         assert.deepEqual(Object.keys(logs), ["loss", "accuracy"]);
-        assert.ok(Math.abs(logs.loss - getLoss("bce").compute(Matrix.from(new Sequential({ inputSize: 2, seed: 42, layers: [dense(8, "tanh"), dense(1, "sigmoid")] }).predict(XOR_X)), new Matrix(4, 1, XOR_Y))) < 1e-12);
+        assert.ok(
+            Math.abs(
+                logs.loss -
+                    getLoss("bce").compute(
+                        Matrix.from(
+                            new Sequential({
+                                inputSize: 2,
+                                seed: 42,
+                                layers: [dense(8, "tanh"), dense(1, "sigmoid")],
+                            }).predict(XOR_X),
+                        ),
+                        new Matrix(4, 1, XOR_Y),
+                    ),
+            ) < 1e-12,
+        );
         assert.notDeepEqual(weightsOf(model), before);
         assert.equal(model.optimizer?.iterations, 1);
     });
@@ -189,7 +215,14 @@ describe("Sequential: gradients", () => {
         return spy;
     }
 
-    const cases: { output: ActivationName; loss: LossIdentifier; outputs: number; fused: boolean; sparse?: boolean }[] = [
+    const cases: {
+        output: ActivationName;
+        loss: LossIdentifier;
+        outputs: number;
+        fused: boolean;
+        sparse?: boolean;
+        standalone?: boolean;
+    }[] = [
         { output: "sigmoid", loss: "bce", outputs: 2, fused: true },
         { output: "softmax", loss: "cce", outputs: 3, fused: true },
         { output: "softmax", loss: "scce", outputs: 3, fused: true, sparse: true },
@@ -197,11 +230,14 @@ describe("Sequential: gradients", () => {
         { output: "softmax", loss: "mse", outputs: 3, fused: false },
         { output: "linear", loss: { name: "huber", delta: 0.5 }, outputs: 2, fused: false },
         { output: "sigmoid", loss: "mae", outputs: 1, fused: false },
+        { output: "softmax", loss: "cce", outputs: 3, fused: true, standalone: true },
+        { output: "sigmoid", loss: "bce", outputs: 2, fused: true, standalone: true },
     ];
 
     for (const c of cases) {
         const label = `${c.output} + ${typeof c.loss === "string" ? c.loss : (c.loss as { name: string }).name}`;
-        it(`matches finite differences for every parameter of a 3-layer model (${label}${c.fused ? ", fused" : ""})`, () => {
+        const where = c.standalone ? "Dense + Activation layer head" : "3-layer model";
+        it(`matches finite differences for every parameter of a ${where} (${label}${c.fused ? ", fused" : ""})`, () => {
             const rng = new Random(21);
             const model = new Sequential({
                 inputSize: 3,
@@ -209,7 +245,17 @@ describe("Sequential: gradients", () => {
                 layers: [
                     dense(5, { activation: "tanh", kernelRegularizer: { l1: 0.01, l2: 0.02 } }),
                     dense(4, "elu"),
-                    dense(c.outputs, { activation: c.output, biasInitializer: { name: "randomNormal", stddev: 0.5 } }),
+                    ...(c.standalone
+                        ? [
+                              dense(c.outputs, { biasInitializer: { name: "randomNormal", stddev: 0.5 } }),
+                              activation(c.output),
+                          ]
+                        : [
+                              dense(c.outputs, {
+                                  activation: c.output,
+                                  biasInitializer: { name: "randomNormal", stddev: 0.5 },
+                              }),
+                          ]),
                 ],
             });
             const rows = 6;
@@ -222,8 +268,10 @@ describe("Sequential: gradients", () => {
                     row[rng.int(c.outputs)] = 1;
                     return row;
                 });
-            } else if (c.output === "sigmoid") y = Array.from({ length: rows }, () => Array.from({ length: c.outputs }, () => rng.int(2)));
-            else y = Array.from({ length: rows }, () => Array.from({ length: c.outputs }, () => rng.uniform(-0.9, 0.9)));
+            } else if (c.output === "sigmoid")
+                y = Array.from({ length: rows }, () => Array.from({ length: c.outputs }, () => rng.int(2)));
+            else
+                y = Array.from({ length: rows }, () => Array.from({ length: c.outputs }, () => rng.uniform(-0.9, 0.9)));
 
             const spy = spyLoss(c.loss);
             model.compile({ loss: spy.loss, optimizer: { name: "sgd", learningRate: 0 } });
@@ -244,7 +292,10 @@ describe("Sequential: gradients", () => {
                     values[i] = original;
                     const numeric = (plus - minus) / (2 * h);
                     const scale = Math.max(1, Math.abs(numeric), Math.abs(grad[i]));
-                    assert.ok(Math.abs(numeric - grad[i]) / scale < 1e-6, `${param.name}[${i}]: ${grad[i]} vs ${numeric}`);
+                    assert.ok(
+                        Math.abs(numeric - grad[i]) / scale < 1e-6,
+                        `${param.name}[${i}]: ${grad[i]} vs ${numeric}`,
+                    );
                 }
             }
         });
@@ -285,7 +336,13 @@ describe("Sequential: validation, logs and callbacks", () => {
             epochs: 2,
             batchSize: 8,
             validationSplit: 0.25,
-            callbacks: [{ onTrainBegin: (ctx) => void (samples = ctx.samples) }],
+            callbacks: [
+                {
+                    onTrainBegin: (ctx) => {
+                        samples = ctx.samples;
+                    },
+                },
+            ],
         });
         assert.equal(samples, 30);
         const expected = model.evaluate(x.slice(30), y.slice(30), { batchSize: 8 });
@@ -298,7 +355,12 @@ describe("Sequential: validation, logs and callbacks", () => {
         const model = regressionModel();
         const valX = x.slice(0, 10);
         const valY = y.slice(0, 10);
-        const history = model.fit(x, y, { epochs: 2, batchSize: 16, validationData: [valX, valY], validationSplit: 0.5 });
+        const history = model.fit(x, y, {
+            epochs: 2,
+            batchSize: 16,
+            validationData: [valX, valY],
+            validationSplit: 0.5,
+        });
         assert.equal(history.last("valLoss"), model.evaluate(valX, valY, { batchSize: 16 }).loss);
     });
 
@@ -315,9 +377,20 @@ describe("Sequential: validation, logs and callbacks", () => {
     });
 
     it("includes kernel regularization in loss and valLoss", () => {
-        const model = new Sequential({ inputSize: 2, seed: 1, layers: [dense(4, { kernelRegularizer: { l2: 0.5 } }), dense(1)] });
+        const model = new Sequential({
+            inputSize: 2,
+            seed: 1,
+            layers: [dense(4, { kernelRegularizer: { l2: 0.5 } }), dense(1)],
+        });
         model.compile({ loss: "mse", optimizer: { name: "sgd", learningRate: 0 } });
-        const plain = getLoss("mse").compute(model.predict(Matrix.from(x)), new Matrix(40, 1, y.map((r) => r[0])));
+        const plain = getLoss("mse").compute(
+            model.predict(Matrix.from(x)),
+            new Matrix(
+                40,
+                1,
+                y.map((r) => r[0]),
+            ),
+        );
         const layer = model.layers[0] as unknown as { regularizationLoss(): number };
         assert.ok(Math.abs(model.evaluate(x, y).loss - (plain + layer.regularizationLoss())) < 1e-12);
     });
@@ -328,7 +401,8 @@ describe("Sequential: validation, logs and callbacks", () => {
         const recorder: Callback = {
             onTrainBegin: (ctx) => {
                 events.push("trainBegin");
-                contextSeen = ctx.epochs === 2 && ctx.batchSize === 16 && ctx.stepsPerEpoch === 2 && ctx.hasValidation === false;
+                contextSeen =
+                    ctx.epochs === 2 && ctx.batchSize === 16 && ctx.stepsPerEpoch === 2 && ctx.hasValidation === false;
             },
             onEpochBegin: (epoch) => void events.push(`epochBegin ${epoch}`),
             onBatchEnd: (batch, logs) => void events.push(`batchEnd ${batch} size=${logs.size} ${typeof logs.loss}`),
@@ -370,7 +444,10 @@ describe("Sequential: validation, logs and callbacks", () => {
         }
         assert.deepEqual(seen, [0, 1, 2, 3, 4]);
         assert.equal(lines.length, 3); // epochs 2, 4 and the stopped epoch 5
-        assert.match(lines[0], /^Epoch  2\/10 - loss: \d\.\d{4} - meanAbsoluteError: \d\.\d{4} - rootMeanSquaredError: \d\.\d{4} - [\d.]+ms$/);
+        assert.match(
+            lines[0],
+            /^Epoch {2}2\/10 - loss: \d\.\d{4} - meanAbsoluteError: \d\.\d{4} - rootMeanSquaredError: \d\.\d{4} - [\d.]+ms$/,
+        );
     });
 
     it("early stopping restores the weights of the best epoch", () => {
@@ -382,7 +459,11 @@ describe("Sequential: validation, logs and callbacks", () => {
             epochs: 8,
             validationSplit: 0.2,
             callbacks: [
-                { onEpochEnd: (epoch: number, logs: Logs) => void (logs.valLoss = script[epoch]) },
+                {
+                    onEpochEnd: (epoch: number, logs: Logs) => {
+                        logs.valLoss = script[epoch];
+                    },
+                },
                 stopper,
                 { onEpochEnd: () => void snapshots.push(model.getWeights()) },
             ],
@@ -398,7 +479,8 @@ describe("Sequential: validation, logs and callbacks", () => {
     it("sync fit rejects callbacks that return a Promise, pointing to fitAsync", () => {
         assert.throws(
             () => regressionModel().fit(x, y, { epochs: 2, callbacks: [{ onEpochEnd: async () => {} }] }),
-            (e: unknown) => e instanceof ValidationError && /onEpochEnd\(\) returned a Promise.*fitAsync/.test(e.message),
+            (e: unknown) =>
+                e instanceof ValidationError && /onEpochEnd\(\) returned a Promise.*fitAsync/.test(e.message),
         );
     });
 });
@@ -437,7 +519,16 @@ describe("Sequential: fitAsync", () => {
             ],
             onEpochEnd: async (epoch) => void events.push(`shorthand ${epoch}`),
         });
-        assert.deepEqual(events, ["begin 0", "end 0", "awaited 0", "shorthand 0", "begin 1", "end 1", "awaited 1", "shorthand 1"]);
+        assert.deepEqual(events, [
+            "begin 0",
+            "end 0",
+            "awaited 0",
+            "shorthand 0",
+            "begin 1",
+            "end 1",
+            "awaited 1",
+            "shorthand 1",
+        ]);
     });
 
     it("yields to the event loop while training", async () => {
@@ -475,6 +566,17 @@ describe("Sequential: fitAsync", () => {
         assert.equal(fresh.optimizer?.iterations, 0);
     });
 
+    it("refuses to start a second fit while one is running", async () => {
+        const m = model();
+        const first = m.fitAsync(x, y, { epochs: 3, yieldEvery: 0 });
+        await assert.rejects(m.fitAsync(x, y), /already training/);
+        assert.throws(() => m.fit(x, y), /already training/);
+        await first;
+        assert.doesNotThrow(() => m.fit(x, y));
+        assert.throws(() => m.fit(x, y, { callbacks: [{ onEpochEnd: () => void m.fit(x, y) }] }), /already training/);
+        assert.doesNotThrow(() => m.fit(x, y), "the flag is cleared after an error");
+    });
+
     it("rejects invalid input asynchronously", async () => {
         await assert.rejects(model().fitAsync(x, y, { epochs: 0 }), /"epochs" must be a positive integer, got 0/);
         await assert.rejects(model().fitAsync(x, y, { signal: {} as AbortSignal }), /"signal" must be an AbortSignal/);
@@ -485,21 +587,38 @@ describe("Sequential: inference and evaluation", () => {
     it("predict mirrors its input: sample -> number[], rows -> number[][], Matrix -> new Matrix", () => {
         const model = xorModel();
         const one = model.predict([1, 0]);
-        const rows = model.predict([[1, 0], [0, 0]]);
-        const matrix = model.predict(Matrix.fromArray([[1, 0], [0, 0]]));
+        const rows = model.predict([
+            [1, 0],
+            [0, 0],
+        ]);
+        const matrix = model.predict(
+            Matrix.fromArray([
+                [1, 0],
+                [0, 0],
+            ]),
+        );
         assert.ok(Array.isArray(one) && typeof one[0] === "number" && one.length === 1);
         assert.equal(rows.length, 2);
         assert.deepEqual(rows[0], one);
         assert.ok(matrix instanceof Matrix);
         assert.deepEqual(matrix.toArray(), rows);
-        model.predict(Matrix.fromArray([[1, 1], [0, 1]]));
+        model.predict(
+            Matrix.fromArray([
+                [1, 1],
+                [0, 1],
+            ]),
+        );
         assert.deepEqual(matrix.toArray(), rows, "returned matrices are copies, not internal buffers");
         assert.deepEqual(model.predict([]), []);
     });
 
     it("predicts in chunks with identical results", () => {
         const rng = new Random(2);
-        const model = new Sequential({ inputSize: 3, seed: 2, layers: [dense(5, "relu"), batchNormalization(), dense(2, "softmax")] });
+        const model = new Sequential({
+            inputSize: 3,
+            seed: 2,
+            layers: [dense(5, "relu"), batchNormalization(), dense(2, "softmax")],
+        });
         const x = new Matrix(23, 3).map(() => rng.uniform(-2, 2));
         assert.deepEqual(model.predict(x, { batchSize: 4 }).data, model.predict(x).data);
     });
@@ -514,7 +633,16 @@ describe("Sequential: inference and evaluation", () => {
 
 describe("Sequential: structure and weights", () => {
     it("auto-names layers per model and keeps user names", () => {
-        const model = new Sequential({ layers: [dense(4), dropout(0.1), dense(3, { name: "dense_2" }), batchNormalization(), dense(2), activation("relu")] });
+        const model = new Sequential({
+            layers: [
+                dense(4),
+                dropout(0.1),
+                dense(3, { name: "dense_2" }),
+                batchNormalization(),
+                dense(2),
+                activation("relu"),
+            ],
+        });
         assert.deepEqual(
             model.layers.map((l) => l.name),
             ["dense_1", "dropout_1", "dense_2", "batch_normalization_1", "dense_3", "activation_1"],
@@ -531,7 +659,10 @@ describe("Sequential: structure and weights", () => {
         assert.equal(model.add(dense(4)).add(dense(2)), model);
         assert.equal(model.built, true);
         assert.equal(model.parameterCount, 3 * 4 + 4 + 4 * 2 + 2);
-        assert.deepEqual(model.parameters().map((p) => p.name), ["dense_1/kernel", "dense_1/bias", "dense_2/kernel", "dense_2/bias"]);
+        assert.deepEqual(
+            model.parameters().map((p) => p.name),
+            ["dense_1/kernel", "dense_1/bias", "dense_2/kernel", "dense_2/bias"],
+        );
         assert.equal(model.outputSize, 2);
         assert.throws(() => model.build(4), /already built for inputSize 3; got 4/);
     });
@@ -567,12 +698,15 @@ describe("Sequential: structure and weights", () => {
         const a = new Sequential({ inputSize: 2, seed: 1, layers: [dense(3), dense(1)] });
         const b = new Sequential({ inputSize: 2, seed: 2, layers: [dense(3), dense(1)] });
         const weights = a.getWeights();
-        assert.deepEqual(weights.map((w) => [w.name, w.shape]), [
-            ["dense_1/kernel", [2, 3]],
-            ["dense_1/bias", [1, 3]],
-            ["dense_2/kernel", [3, 1]],
-            ["dense_2/bias", [1, 1]],
-        ]);
+        assert.deepEqual(
+            weights.map((w) => [w.name, w.shape]),
+            [
+                ["dense_1/kernel", [2, 3]],
+                ["dense_1/bias", [1, 3]],
+                ["dense_2/kernel", [3, 1]],
+                ["dense_2/bias", [1, 1]],
+            ],
+        );
         b.setWeights(weights.slice().reverse());
         assert.deepEqual(b.predict([0.3, -0.7]), a.predict([0.3, -0.7]));
         weights[0].data[0] = 123;
@@ -581,9 +715,15 @@ describe("Sequential: structure and weights", () => {
         const before = weightsOf(b);
         const bad = a.getWeights();
         bad[3] = { name: "dense_2/bias", shape: [1, 2], data: [0, 0] };
-        assert.throws(() => b.setWeights(bad), /weight "dense_2\/bias" has shape \[1, 2\], but the model expects \[1, 1\]/);
+        assert.throws(
+            () => b.setWeights(bad),
+            /weight "dense_2\/bias" has shape \[1, 2\], but the model expects \[1, 1\]/,
+        );
         assert.throws(() => b.setWeights(a.getWeights().slice(1)), /missing weight\(s\) "dense_1\/kernel"/);
-        assert.throws(() => b.setWeights([...a.getWeights(), { name: "x/kernel", shape: [1, 1], data: [1] }]), /unknown weight "x\/kernel"/);
+        assert.throws(
+            () => b.setWeights([...a.getWeights(), { name: "x/kernel", shape: [1, 1], data: [1] }]),
+            /unknown weight "x\/kernel"/,
+        );
         const nan = a.getWeights();
         nan[1].data[0] = Number.NaN;
         assert.throws(() => b.setWeights(nan), /must be finite/);
@@ -614,12 +754,24 @@ describe("Sequential: actionable errors", () => {
     it("explains input and target shape mismatches", () => {
         assert.throws(
             () => model().predict([1, 2, 3]),
-            (e: unknown) => e instanceof ShapeError && e.message === "Expected input with 2 features (inputSize), got 3",
+            (e: unknown) =>
+                e instanceof ShapeError && e.message === "Expected input with 2 features (inputSize), got 3",
+        );
+        const scalar = new Sequential({ inputSize: 1, layers: [dense(1)] });
+        assert.throws(
+            () => scalar.predict([0.1, 0.2]),
+            /Expected input with 1 feature \(inputSize\), got 2. A flat array is one sample; pass one row per sample/,
         );
         assert.throws(() => model().fit([[0, 1, 2]], [1]), /Expected input with 2 features \(inputSize\), got 3/);
         assert.throws(() => model().fit(XOR_X, [0, 1, 1]), /x and y must have the same number of samples, got 4 and 3/);
         assert.throws(
-            () => model().fit(XOR_X, [[0, 1], [1, 0], [1, 0], [0, 1]]),
+            () =>
+                model().fit(XOR_X, [
+                    [0, 1],
+                    [1, 0],
+                    [1, 0],
+                    [0, 1],
+                ]),
             /expected y with 1 column \(outputSize of the last layer\), got 2/,
         );
         assert.throws(() => model().fit([[0, 1], [1]], [0, 1]), /Ragged input: row 1 has length 1, expected 2/);
@@ -628,22 +780,53 @@ describe("Sequential: actionable errors", () => {
     it("guides classification target formats", () => {
         const classifier = new Sequential({ inputSize: 2, layers: [dense(3, "softmax")] });
         classifier.compile({ loss: "cce" });
-        assert.throws(() => classifier.fit(XOR_X, [0, 1, 2, 1]), /use loss "scce", or one-hot encode them with oneHot\(labels, 3\)/);
+        assert.throws(
+            () => classifier.fit(XOR_X, [0, 1, 2, 1]),
+            /use loss "scce", or one-hot encode them with oneHot\(labels, 3\)/,
+        );
         classifier.compile({ loss: "scce" });
-        assert.throws(() => classifier.fit(XOR_X, [[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 0, 0]]), /one integer class index per sample, got 3 columns/);
+        assert.throws(
+            () =>
+                classifier.fit(XOR_X, [
+                    [1, 0, 0],
+                    [0, 1, 0],
+                    [0, 0, 1],
+                    [1, 0, 0],
+                ]),
+            /one integer class index per sample, got 3 columns/,
+        );
         assert.throws(() => classifier.fit(XOR_X, [0, 1, 3, 1]), /y\[2\] = 3 is not a class index in \[0, 3\)/);
     });
 
     it("explains missing compile, layers, bad options and non-finite data", () => {
         const plain = new Sequential({ inputSize: 2, layers: [dense(1)] });
-        assert.throws(() => plain.fit(XOR_X, XOR_Y), /not compiled; call model.compile\(\{ loss: "mse", optimizer: "adam" \}\) first/);
+        assert.throws(
+            () => plain.fit(XOR_X, XOR_Y),
+            /not compiled; call model.compile\(\{ loss: "mse", optimizer: "adam" \}\) first/,
+        );
         assert.throws(() => plain.compile({} as never), /"loss" is required/);
         assert.throws(() => new Sequential().predict([1]), /the model has no layers/);
-        assert.throws(() => model().fit(XOR_X, XOR_Y, { batch_size: 2 } as never), /unknown option "batch_size". Valid options: epochs, batchSize/);
-        assert.throws(() => model().fit(XOR_X, XOR_Y, { batchSize: 0 }), /"batchSize" must be a positive integer, got 0/);
-        assert.throws(() => model().fit([[0, Number.POSITIVE_INFINITY]], [1]), /x contains Infinity at row 0, column 1; clean or impute/);
+        assert.throws(
+            () => model().fit(XOR_X, XOR_Y, { batch_size: 2 } as never),
+            /unknown option "batch_size". Valid options: epochs, batchSize/,
+        );
+        assert.throws(
+            () => model().fit(XOR_X, XOR_Y, { batchSize: 0 }),
+            /"batchSize" must be a positive integer, got 0/,
+        );
+        assert.throws(
+            () => model().fit([[0, Number.POSITIVE_INFINITY]], [1]),
+            /x contains Infinity at row 0, column 1; clean or impute/,
+        );
         assert.throws(() => model().fit([[0, Number.NaN]], [1]), /Non-numeric value at \[0, 1\]: NaN/);
-        assert.throws(() => model().fit(Matrix.fromArray([[0, 0]]).map(() => Number.NaN), [1]), /x contains NaN at row 0, column 0/);
+        assert.throws(
+            () =>
+                model().fit(
+                    Matrix.fromArray([[0, 0]]).map(() => Number.NaN),
+                    [1],
+                ),
+            /x contains NaN at row 0, column 0/,
+        );
         assert.throws(() => model().fit(XOR_X, XOR_Y, { validationSplit: 0.1 }), /leaves 0 for validation/);
         assert.throws(() => new Sequential({ seed: 1.5 }), /"seed" must be an integer/);
         assert.throws(() => model().compile({ loss: "mse", metrics: ["accuracy", "accuracy"] }), /listed twice/);

@@ -6,25 +6,25 @@ import { ACTIVATION_NAMES } from "../activations.js";
 import { ValidationError } from "../core/errors.js";
 import type { ActivationIdentifier, Layer, LayerConfig } from "../core/types.js";
 import { describeValue } from "../utils.js";
-import { ActivationLayer } from "./activation.js";
 import type { ActivationLayerOptions } from "./activation.js";
-import { BatchNormalization } from "./batchNormalization.js";
-import type { BatchNormalizationOptions } from "./batchNormalization.js";
-import { Dense } from "./dense.js";
-import type { DenseOptions } from "./dense.js";
-import { Dropout } from "./dropout.js";
+import { ActivationLayer } from "./activation.js";
 import type { LayerOptions } from "./base.js";
+import type { BatchNormalizationOptions } from "./batchNormalization.js";
+import { BatchNormalization } from "./batchNormalization.js";
+import type { DenseOptions } from "./dense.js";
+import { Dense } from "./dense.js";
+import { Dropout } from "./dropout.js";
 
-export { ActivationLayer } from "./activation.js";
 export type { ActivationLayerOptions } from "./activation.js";
-export { BaseLayer, LayerParameter } from "./base.js";
+export { ActivationLayer } from "./activation.js";
 export type { LayerOptions } from "./base.js";
-export { BatchNormalization } from "./batchNormalization.js";
+export { BaseLayer, LayerParameter } from "./base.js";
 export type { BatchNormalizationOptions } from "./batchNormalization.js";
-export { Dense } from "./dense.js";
+export { BatchNormalization } from "./batchNormalization.js";
 export type { DenseOptions, RegularizerOptions } from "./dense.js";
-export { Dropout } from "./dropout.js";
+export { Dense } from "./dense.js";
 export type { DropoutOptions } from "./dropout.js";
+export { Dropout } from "./dropout.js";
 
 /** Builds a layer from its `getConfig()` output. */
 export type LayerFromConfig = (config: LayerConfig) => Layer;
@@ -65,7 +65,9 @@ export function dense(units: number, activationOrOptions?: ActivationIdentifier 
     }
     if (isDenseOptions(activationOrOptions)) {
         if ("units" in activationOrOptions) {
-            throw new ValidationError(`dense(): pass "units" as the first argument only, e.g. dense(8, { activation: "relu" })`);
+            throw new ValidationError(
+                `dense(): pass "units" as the first argument only, e.g. dense(8, { activation: "relu" })`,
+            );
         }
         return new Dense({ ...(activationOrOptions as Omit<DenseOptions, "units">), units });
     }
@@ -104,7 +106,10 @@ export function batchNormalization(options: BatchNormalizationOptions = {}): Bat
  * activation("relu");
  * activation({ name: "leakyRelu", alpha: 0.2 });
  */
-export function activation(id: ActivationIdentifier, options: Omit<ActivationLayerOptions, "activation"> = {}): ActivationLayer {
+export function activation(
+    id: ActivationIdentifier,
+    options: Omit<ActivationLayerOptions, "activation"> = {},
+): ActivationLayer {
     return new ActivationLayer({ ...options, activation: id });
 }
 

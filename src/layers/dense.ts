@@ -97,7 +97,8 @@ export class Dense extends BaseLayer {
     constructor(options: DenseOptions) {
         const where = "Dense";
         checkOptions(where, options, OPTION_KEYS);
-        if (options === undefined) throw new ValidationError(`${where}: options with "units" are required, e.g. new Dense({ units: 8 })`);
+        if (options === undefined)
+            throw new ValidationError(`${where}: options with "units" are required, e.g. new Dense({ units: 8 })`);
         super(checkLayerName(where, options.name));
         this.units = positiveInteger(where, "units", options.units);
         this.activation = getActivation(options.activation ?? "linear");
@@ -110,7 +111,11 @@ export class Dense extends BaseLayer {
 
     /** Rebuilds a Dense layer from {@link Dense.getConfig} output. */
     static fromConfig(config: LayerConfig): Dense {
-        checkConfigKeys("dense", config, OPTION_KEYS.filter((k) => k !== "name"));
+        checkConfigKeys(
+            "dense",
+            config,
+            OPTION_KEYS.filter((k) => k !== "name"),
+        );
         return new Dense({
             name: config.name,
             units: config.units as number,
@@ -152,7 +157,12 @@ export class Dense extends BaseLayer {
     forward(input: Matrix, _training: boolean): Matrix {
         this.checkInput(input);
         const buffers = this.cache.get(input.rows);
-        denseForward(input, (this.kernelParam as LayerParameter).value.data, this.biasParam?.value.data ?? null, buffers.z);
+        denseForward(
+            input,
+            (this.kernelParam as LayerParameter).value.data,
+            this.biasParam?.value.data ?? null,
+            buffers.z,
+        );
         if (!this.isLinear) this.activation.forward(buffers.z, buffers.a);
         this.lastInput = input;
         this.lastBuffers = buffers;
@@ -259,17 +269,34 @@ function normalizeRegularizer(where: string, value: unknown): Readonly<Required<
 
 /** z = x · W + b, with W [k, n] row-major and z [m, n]. Overwrites z. */
 function denseForward(x: Matrix, W: Float64Array, bias: Float64Array | null, z: Matrix): void {
-    const m = x.rows, k = x.cols, n = z.cols;
-    const X = x.data, Z = z.data;
+    const m = x.rows,
+        k = x.cols,
+        n = z.cols;
+    const X = x.data,
+        Z = z.data;
     let i = 0;
     for (; i + 1 < m; i += 2) {
-        const x0 = i * k, x1 = x0 + k, z0 = i * n, z1 = z0 + n;
+        const x0 = i * k,
+            x1 = x0 + k,
+            z0 = i * n,
+            z1 = z0 + n;
         let j = 0;
         for (; j + 3 < n; j += 4) {
-            let s00 = 0, s01 = 0, s02 = 0, s03 = 0, s10 = 0, s11 = 0, s12 = 0, s13 = 0;
+            let s00 = 0,
+                s01 = 0,
+                s02 = 0,
+                s03 = 0,
+                s10 = 0,
+                s11 = 0,
+                s12 = 0,
+                s13 = 0;
             for (let p = 0, w = j; p < k; p++, w += n) {
-                const a0 = X[x0 + p], a1 = X[x1 + p];
-                const w0 = W[w], w1 = W[w + 1], w2 = W[w + 2], w3 = W[w + 3];
+                const a0 = X[x0 + p],
+                    a1 = X[x1 + p];
+                const w0 = W[w],
+                    w1 = W[w + 1],
+                    w2 = W[w + 2],
+                    w3 = W[w + 3];
                 s00 += a0 * w0;
                 s01 += a0 * w1;
                 s02 += a0 * w2;
@@ -289,7 +316,8 @@ function denseForward(x: Matrix, W: Float64Array, bias: Float64Array | null, z: 
             Z[z1 + j + 3] = s13;
         }
         for (; j < n; j++) {
-            let s0 = 0, s1 = 0;
+            let s0 = 0,
+                s1 = 0;
             for (let p = 0, w = j; p < k; p++, w += n) {
                 const wv = W[w];
                 s0 += X[x0 + p] * wv;
@@ -309,10 +337,25 @@ function denseForward(x: Matrix, W: Float64Array, bias: Float64Array | null, z: 
 }
 
 /** One row of z = x · W (the last odd row, or single-sample prediction): 8 independent accumulators. */
-function forwardRow(X: Float64Array, W: Float64Array, Z: Float64Array, x0: number, z0: number, k: number, n: number): void {
+function forwardRow(
+    X: Float64Array,
+    W: Float64Array,
+    Z: Float64Array,
+    x0: number,
+    z0: number,
+    k: number,
+    n: number,
+): void {
     let j = 0;
     for (; j + 7 < n; j += 8) {
-        let s0 = 0, s1 = 0, s2 = 0, s3 = 0, s4 = 0, s5 = 0, s6 = 0, s7 = 0;
+        let s0 = 0,
+            s1 = 0,
+            s2 = 0,
+            s3 = 0,
+            s4 = 0,
+            s5 = 0,
+            s6 = 0,
+            s7 = 0;
         for (let p = 0, w = j; p < k; p++, w += n) {
             const a = X[x0 + p];
             s0 += a * W[w];
@@ -342,17 +385,32 @@ function forwardRow(X: Float64Array, W: Float64Array, Z: Float64Array, x0: numbe
 
 /** dW = xᵀ · dz, with x [m, k], dz [m, n], dW [k, n]. Overwrites dW. */
 function kernelGradient(x: Matrix, dz: Matrix, dW: Float64Array): void {
-    const m = x.rows, k = x.cols, n = dz.cols;
-    const X = x.data, D = dz.data;
+    const m = x.rows,
+        k = x.cols,
+        n = dz.cols;
+    const X = x.data,
+        D = dz.data;
     let p = 0;
     for (; p + 1 < k; p += 2) {
-        const w0 = p * n, w1 = w0 + n;
+        const w0 = p * n,
+            w1 = w0 + n;
         let j = 0;
         for (; j + 3 < n; j += 4) {
-            let s00 = 0, s01 = 0, s02 = 0, s03 = 0, s10 = 0, s11 = 0, s12 = 0, s13 = 0;
+            let s00 = 0,
+                s01 = 0,
+                s02 = 0,
+                s03 = 0,
+                s10 = 0,
+                s11 = 0,
+                s12 = 0,
+                s13 = 0;
             for (let r = 0, xi = p, di = j; r < m; r++, xi += k, di += n) {
-                const a0 = X[xi], a1 = X[xi + 1];
-                const d0 = D[di], d1 = D[di + 1], d2 = D[di + 2], d3 = D[di + 3];
+                const a0 = X[xi],
+                    a1 = X[xi + 1];
+                const d0 = D[di],
+                    d1 = D[di + 1],
+                    d2 = D[di + 2],
+                    d3 = D[di + 3];
                 s00 += a0 * d0;
                 s01 += a0 * d1;
                 s02 += a0 * d2;
@@ -372,7 +430,8 @@ function kernelGradient(x: Matrix, dz: Matrix, dW: Float64Array): void {
             dW[w1 + j + 3] = s13;
         }
         for (; j < n; j++) {
-            let s0 = 0, s1 = 0;
+            let s0 = 0,
+                s1 = 0;
             for (let r = 0, xi = p, di = j; r < m; r++, xi += k, di += n) {
                 const d = D[di];
                 s0 += X[xi] * d;
@@ -394,7 +453,9 @@ function kernelGradient(x: Matrix, dz: Matrix, dW: Float64Array): void {
 
 /** db = Σ_rows dz. Overwrites db. */
 function columnSums(dz: Matrix, db: Float64Array): void {
-    const m = dz.rows, n = dz.cols, D = dz.data;
+    const m = dz.rows,
+        n = dz.cols,
+        D = dz.data;
     db.fill(0);
     for (let r = 0; r < m; r++) {
         const row = r * n;
@@ -404,18 +465,38 @@ function columnSums(dz: Matrix, db: Float64Array): void {
 
 /** dx = dz · Wᵀ, with dz [m, n], W [k, n], dx [m, k]. Overwrites dx. */
 function inputGradientKernel(dz: Matrix, W: Float64Array, dx: Matrix): void {
-    const m = dz.rows, n = dz.cols, k = dx.cols;
-    const D = dz.data, X = dx.data;
+    const m = dz.rows,
+        n = dz.cols,
+        k = dx.cols;
+    const D = dz.data,
+        X = dx.data;
     let i = 0;
     for (; i + 1 < m; i += 2) {
-        const d0 = i * n, d1 = d0 + n, x0 = i * k, x1 = x0 + k;
+        const d0 = i * n,
+            d1 = d0 + n,
+            x0 = i * k,
+            x1 = x0 + k;
         let p = 0;
         for (; p + 3 < k; p += 4) {
-            const w0 = p * n, w1 = w0 + n, w2 = w1 + n, w3 = w2 + n;
-            let s00 = 0, s01 = 0, s02 = 0, s03 = 0, s10 = 0, s11 = 0, s12 = 0, s13 = 0;
+            const w0 = p * n,
+                w1 = w0 + n,
+                w2 = w1 + n,
+                w3 = w2 + n;
+            let s00 = 0,
+                s01 = 0,
+                s02 = 0,
+                s03 = 0,
+                s10 = 0,
+                s11 = 0,
+                s12 = 0,
+                s13 = 0;
             for (let j = 0; j < n; j++) {
-                const a0 = D[d0 + j], a1 = D[d1 + j];
-                const b0 = W[w0 + j], b1 = W[w1 + j], b2 = W[w2 + j], b3 = W[w3 + j];
+                const a0 = D[d0 + j],
+                    a1 = D[d1 + j];
+                const b0 = W[w0 + j],
+                    b1 = W[w1 + j],
+                    b2 = W[w2 + j],
+                    b3 = W[w3 + j];
                 s00 += a0 * b0;
                 s01 += a0 * b1;
                 s02 += a0 * b2;
@@ -436,7 +517,8 @@ function inputGradientKernel(dz: Matrix, W: Float64Array, dx: Matrix): void {
         }
         for (; p < k; p++) {
             const w0 = p * n;
-            let s0 = 0, s1 = 0;
+            let s0 = 0,
+                s1 = 0;
             for (let j = 0; j < n; j++) {
                 const b = W[w0 + j];
                 s0 += D[d0 + j] * b;
@@ -447,11 +529,18 @@ function inputGradientKernel(dz: Matrix, W: Float64Array, dx: Matrix): void {
         }
     }
     if (i < m) {
-        const d0 = i * n, x0 = i * k;
+        const d0 = i * n,
+            x0 = i * k;
         let p = 0;
         for (; p + 3 < k; p += 4) {
-            const w0 = p * n, w1 = w0 + n, w2 = w1 + n, w3 = w2 + n;
-            let s0 = 0, s1 = 0, s2 = 0, s3 = 0;
+            const w0 = p * n,
+                w1 = w0 + n,
+                w2 = w1 + n,
+                w3 = w2 + n;
+            let s0 = 0,
+                s1 = 0,
+                s2 = 0,
+                s3 = 0;
             for (let j = 0; j < n; j++) {
                 const a = D[d0 + j];
                 s0 += a * W[w0 + j];

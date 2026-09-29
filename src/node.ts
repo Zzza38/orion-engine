@@ -16,8 +16,8 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { ValidationError } from "./core/errors.js";
 import type { Sequential } from "./model.js";
-import { deserializeModel, serializeModel } from "./serialization.js";
 import type { DeserializeOptions, SerializeOptions } from "./serialization.js";
+import { deserializeModel, serializeModel } from "./serialization.js";
 import { describeValue } from "./utils.js";
 
 export * from "./index.js";

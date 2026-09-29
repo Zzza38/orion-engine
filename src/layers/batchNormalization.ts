@@ -73,7 +73,14 @@ export class BatchNormalization extends BaseLayer {
         const where = "BatchNormalization";
         checkOptions(where, options, OPTION_KEYS);
         super(checkLayerName(where, options.name));
-        this.momentum = numberOption(where, "momentum", options.momentum, 0.99, "a number in [0, 1)", (v) => v >= 0 && v < 1);
+        this.momentum = numberOption(
+            where,
+            "momentum",
+            options.momentum,
+            0.99,
+            "a number in [0, 1)",
+            (v) => v >= 0 && v < 1,
+        );
         this.epsilon = numberOption(where, "epsilon", options.epsilon, 1e-3, "a finite number > 0", (v) => v > 0);
         this.center = booleanOption(where, "center", options.center, true);
         this.scale = booleanOption(where, "scale", options.scale, true);
@@ -81,7 +88,11 @@ export class BatchNormalization extends BaseLayer {
 
     /** Rebuilds a BatchNormalization layer from {@link BatchNormalization.getConfig} output. */
     static fromConfig(config: LayerConfig): BatchNormalization {
-        checkConfigKeys("batchNormalization", config, OPTION_KEYS.filter((k) => k !== "name"));
+        checkConfigKeys(
+            "batchNormalization",
+            config,
+            OPTION_KEYS.filter((k) => k !== "name"),
+        );
         return new BatchNormalization({
             name: config.name,
             momentum: config.momentum as number | undefined,
@@ -112,13 +123,17 @@ export class BatchNormalization extends BaseLayer {
     forward(input: Matrix, training: boolean): Matrix {
         this.checkInput(input);
         const buffers = this.cache.get(input.rows);
-        const rows = input.rows, n = input.cols;
-        const X = input.data, Y = buffers.out.data, XH = buffers.xHat.data;
+        const rows = input.rows,
+            n = input.cols;
+        const X = input.data,
+            Y = buffers.out.data,
+            XH = buffers.xHat.data;
         const gamma = this.gamma?.value.data ?? null;
         const beta = this.beta?.value.data ?? null;
         const movingMean = (this.movingMean as LayerParameter).value.data;
         const movingVariance = (this.movingVariance as LayerParameter).value.data;
-        const mean = this.mean, invStd = this.invStd;
+        const mean = this.mean,
+            invStd = this.invStd;
         const eps = this.epsilon;
 
         if (training) {
@@ -139,7 +154,8 @@ export class BatchNormalization extends BaseLayer {
                     variance[j] += d * d;
                 }
             }
-            const m = this.momentum, oneMinusM = 1 - m;
+            const m = this.momentum,
+                oneMinusM = 1 - m;
             for (let j = 0; j < n; j++) {
                 const v = variance[j] * invRows;
                 movingMean[j] = m * movingMean[j] + oneMinusM * mean[j];
@@ -171,11 +187,14 @@ export class BatchNormalization extends BaseLayer {
         const buffers = this.lastBuffers;
         this.checkGradient(gradOutput, buffers === null ? -1 : buffers.out.rows, this.outputSize);
         const b = buffers as BatchNormBuffers;
-        const rows = gradOutput.rows, n = gradOutput.cols;
-        const G = gradOutput.data, XH = b.xHat.data;
+        const rows = gradOutput.rows,
+            n = gradOutput.cols;
+        const G = gradOutput.data,
+            XH = b.xHat.data;
         const gamma = this.gamma?.value.data ?? null;
         const invStd = this.invStd;
-        const sumDy = this.sumDy, sumDyXHat = this.sumDyXHat;
+        const sumDy = this.sumDy,
+            sumDyXHat = this.sumDyXHat;
 
         sumDy.fill(0);
         sumDyXHat.fill(0);

@@ -15,47 +15,8 @@
  * @packageDocumentation
  */
 
-export { VERSION } from "./version.js";
-
-// ---- Model ----------------------------------------------------------------------------------
-export { Sequential } from "./model.js";
-export type { BatchOptions, CompileOptions, FitAsyncOptions, FitOptions, SequentialOptions } from "./model.js";
-
-// ---- Layers ---------------------------------------------------------------------------------
-export {
-    ActivationLayer,
-    activation,
-    BaseLayer,
-    BatchNormalization,
-    batchNormalization,
-    Dense,
-    Dropout,
-    dense,
-    dropout,
-    LAYER_TYPES,
-    LayerParameter,
-    layerFromConfig,
-    registerLayer,
-} from "./layers/index.js";
-export type {
-    ActivationLayerOptions,
-    BatchNormalizationOptions,
-    DenseOptions,
-    DropoutOptions,
-    LayerFromConfig,
-    LayerOptions,
-    RegularizerOptions,
-} from "./layers/index.js";
-
-// ---- Callbacks ------------------------------------------------------------------------------
-export {
-    earlyStopping,
-    formatEpoch,
-    History,
-    learningRateScheduler,
-    progressLogger,
-    reduceLROnPlateau,
-} from "./callbacks.js";
+// ---- Building blocks: registries, optimizers, schedules --------------------------------------
+export { ACTIVATION_NAMES, getActivation } from "./activations.js";
 export type {
     Callback,
     CallbackContext,
@@ -66,73 +27,17 @@ export type {
     ProgressLoggerOptions,
     ReduceLROnPlateauOptions,
 } from "./callbacks.js";
-
-// ---- Data utilities -------------------------------------------------------------------------
-export { argmax, MinMaxScaler, oneHot, StandardScaler, shuffleTogether, trainTestSplit } from "./data.js";
-export type {
-    MinMaxScalerJSON,
-    MinMaxScalerOptions,
-    Samples,
-    SamplesOf,
-    StandardScalerJSON,
-    TrainTestSplit,
-    TrainTestSplitOptions,
-} from "./data.js";
-
-// ---- Saving & loading -----------------------------------------------------------------------
-export { deserializeModel, serializeModel } from "./serialization.js";
-export type { DeserializeOptions, SerializeOptions } from "./serialization.js";
+// ---- Callbacks ------------------------------------------------------------------------------
 export {
-    crc32,
-    decodeArtifact,
-    decodeBinary,
-    decodeJson,
-    decodeLegacyOnn,
-    detectFormat,
-    encodeArtifact,
-    encodeBinary,
-    encodeJson,
-    validateArtifact,
-} from "./io/index.js";
-export type {
-    ArtifactFormat,
-    BinaryEncodeOptions,
-    BinaryPrecision,
-    EncodeArtifactOptions,
-    JsonEncodeOptions,
-} from "./io/index.js";
-
-// ---- Building blocks: registries, optimizers, schedules --------------------------------------
-export { ACTIVATION_NAMES, getActivation } from "./activations.js";
-export { getInitializer, INITIALIZER_NAMES } from "./initializers.js";
-export { getLoss, LOSS_NAMES } from "./losses.js";
-export { getMetric, METRIC_NAMES } from "./metrics.js";
-export { Adagrad, Adam, AdamW, BaseOptimizer, getOptimizer, OPTIMIZER_NAMES, RMSprop, SGD } from "./optimizers.js";
-export type {
-    AdagradOptions,
-    AdamOptions,
-    AdamWOptions,
-    OptimizerOptions,
-    RMSpropOptions,
-    SGDOptions,
-} from "./optimizers.js";
-export {
-    constantSchedule,
-    cosineDecay,
-    exponentialDecay,
-    linearWarmup,
-    piecewiseConstant,
-    stepDecay,
-} from "./schedules.js";
-export type {
-    CosineDecayOptions,
-    ExponentialDecayOptions,
-    LearningRateSchedule,
-    LinearWarmupOptions,
-    PiecewiseConstantOptions,
-    StepDecayOptions,
-} from "./schedules.js";
-
+    earlyStopping,
+    formatEpoch,
+    History,
+    learningRateScheduler,
+    progressLogger,
+    reduceLROnPlateau,
+} from "./callbacks.js";
+export { OrionError, SerializationError, ShapeError, TrainingError, ValidationError } from "./core/errors.js";
+export type { MatrixLike } from "./core/matrix.js";
 // ---- Math, randomness, errors ----------------------------------------------------------------
 export {
     add,
@@ -150,10 +55,7 @@ export {
     sumRows,
     transpose,
 } from "./core/matrix.js";
-export type { MatrixLike } from "./core/matrix.js";
 export { Random } from "./core/random.js";
-export { OrionError, SerializationError, ShapeError, TrainingError, ValidationError } from "./core/errors.js";
-
 // ---- Contracts --------------------------------------------------------------------------------
 export type {
     Activation,
@@ -184,3 +86,93 @@ export type {
     TrainingConfig,
     WeightEntry,
 } from "./core/types.js";
+export type {
+    MinMaxScalerJSON,
+    MinMaxScalerOptions,
+    Samples,
+    SamplesOf,
+    StandardScalerJSON,
+    TrainTestSplit,
+    TrainTestSplitOptions,
+} from "./data.js";
+// ---- Data utilities -------------------------------------------------------------------------
+export { argmax, MinMaxScaler, oneHot, StandardScaler, shuffleTogether, trainTestSplit } from "./data.js";
+export { getInitializer, INITIALIZER_NAMES } from "./initializers.js";
+export type {
+    ArtifactFormat,
+    BinaryEncodeOptions,
+    BinaryPrecision,
+    EncodeArtifactOptions,
+    JsonEncodeOptions,
+} from "./io/index.js";
+export {
+    crc32,
+    decodeArtifact,
+    decodeBinary,
+    decodeJson,
+    decodeLegacyOnn,
+    detectFormat,
+    encodeArtifact,
+    encodeBinary,
+    encodeJson,
+    validateArtifact,
+} from "./io/index.js";
+export type {
+    ActivationLayerOptions,
+    BatchNormalizationOptions,
+    DenseOptions,
+    DropoutOptions,
+    LayerFromConfig,
+    LayerOptions,
+    RegularizerOptions,
+} from "./layers/index.js";
+// ---- Layers ---------------------------------------------------------------------------------
+export {
+    ActivationLayer,
+    activation,
+    BaseLayer,
+    BatchNormalization,
+    batchNormalization,
+    Dense,
+    Dropout,
+    dense,
+    dropout,
+    LAYER_TYPES,
+    LayerParameter,
+    layerFromConfig,
+    registerLayer,
+} from "./layers/index.js";
+export { getLoss, LOSS_NAMES } from "./losses.js";
+export { getMetric, METRIC_NAMES } from "./metrics.js";
+export type { BatchOptions, CompileOptions, FitAsyncOptions, FitOptions, SequentialOptions } from "./model.js";
+// ---- Model ----------------------------------------------------------------------------------
+export { Sequential } from "./model.js";
+export type {
+    AdagradOptions,
+    AdamOptions,
+    AdamWOptions,
+    OptimizerOptions,
+    RMSpropOptions,
+    SGDOptions,
+} from "./optimizers.js";
+export { Adagrad, Adam, AdamW, BaseOptimizer, getOptimizer, OPTIMIZER_NAMES, RMSprop, SGD } from "./optimizers.js";
+export type {
+    CosineDecayOptions,
+    ExponentialDecayOptions,
+    LearningRateSchedule,
+    LinearWarmupOptions,
+    PiecewiseConstantOptions,
+    StepDecayOptions,
+} from "./schedules.js";
+export {
+    constantSchedule,
+    cosineDecay,
+    exponentialDecay,
+    linearWarmup,
+    piecewiseConstant,
+    stepDecay,
+} from "./schedules.js";
+export type { DeserializeOptions, SerializeOptions } from "./serialization.js";
+// ---- Saving & loading -----------------------------------------------------------------------
+export { deserializeModel, serializeModel } from "./serialization.js";
+export { VERSION } from "./version.js";

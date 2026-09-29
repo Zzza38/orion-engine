@@ -6,10 +6,11 @@
  * Both engines train with plain SGD. The new engine uses mini-batches of 32; the legacy engine
  * only supports per-sample updates, so it gets a small, time-capped workload.
  */
-import { NeuralNetwork } from "./legacy-engine.js";
-import type { NeuralNetworkActivationFunction } from "./legacy-engine.js";
-import { dense, Matrix, Random, Sequential } from "../src/index.js";
+
 import type { ActivationName } from "../src/index.js";
+import { dense, Matrix, Random, Sequential } from "../src/index.js";
+import type { NeuralNetworkActivationFunction } from "./legacy-engine.js";
+import { NeuralNetwork } from "./legacy-engine.js";
 
 interface Case {
     name: string;
@@ -23,9 +24,33 @@ interface Case {
 }
 
 const CASES: Case[] = [
-    { name: "XOR 2-4-1", sizes: [2, 4, 1], hidden: "tanh", output: "sigmoid", samples: 4, epochs: 20000, legacySamples: 20000 },
-    { name: "MLP 64-128-10", sizes: [64, 128, 10], hidden: "relu", output: "softmax", samples: 4096, epochs: 5, legacySamples: 2000 },
-    { name: "MNIST-size 784-128-10", sizes: [784, 128, 10], hidden: "relu", output: "softmax", samples: 2048, epochs: 3, legacySamples: 200 },
+    {
+        name: "XOR 2-4-1",
+        sizes: [2, 4, 1],
+        hidden: "tanh",
+        output: "sigmoid",
+        samples: 4,
+        epochs: 20000,
+        legacySamples: 20000,
+    },
+    {
+        name: "MLP 64-128-10",
+        sizes: [64, 128, 10],
+        hidden: "relu",
+        output: "softmax",
+        samples: 4096,
+        epochs: 5,
+        legacySamples: 2000,
+    },
+    {
+        name: "MNIST-size 784-128-10",
+        sizes: [784, 128, 10],
+        hidden: "relu",
+        output: "softmax",
+        samples: 2048,
+        epochs: 3,
+        legacySamples: 200,
+    },
 ];
 
 interface Row {
@@ -36,7 +61,16 @@ interface Row {
 }
 
 function syntheticData(c: Case, rng: Random): { x: number[][]; y: number[][] } {
-    if (c.samples === 4) return { x: [[0, 0], [0, 1], [1, 0], [1, 1]], y: [[0], [1], [1], [0]] };
+    if (c.samples === 4)
+        return {
+            x: [
+                [0, 0],
+                [0, 1],
+                [1, 0],
+                [1, 1],
+            ],
+            y: [[0], [1], [1], [0]],
+        };
     const inputs = c.sizes[0];
     const classes = c.sizes[c.sizes.length - 1];
     const x: number[][] = [];
@@ -95,7 +129,9 @@ function benchNew(c: Case, x: number[][], y: number[][]): Row {
 
 function benchLegacy(c: Case, x: number[][], y: number[][]): Row {
     const net = new NeuralNetwork();
-    c.sizes.forEach((size, i) => net.addLayer(size, i === 0 ? "linear" : i === c.sizes.length - 1 ? c.output : c.hidden));
+    for (let i = 0; i < c.sizes.length; i++) {
+        net.addLayer(c.sizes[i], i === 0 ? "linear" : i === c.sizes.length - 1 ? c.output : c.hidden);
+    }
     const count = Math.min(c.legacySamples, 50);
     net.train(x.slice(0, Math.min(count, x.length)), y.slice(0, Math.min(count, y.length)), 1, 0.1, "crossEntropy"); // warm up
     const inputs: number[][] = [];
@@ -133,7 +169,9 @@ for (const c of CASES) {
         `| ${c.name} | ${fresh.engine} | ${format(fresh.trainSamplesPerSec)} | ${format(fresh.latencyMicros, 2)} | ` +
             `${format(fresh.trainSamplesPerSec / legacy.trainSamplesPerSec, 1)}× | ${format(legacy.latencyMicros / fresh.latencyMicros, 1)}× |`,
     );
-    rows.push(`| ${c.name} | ${legacy.engine} | ${format(legacy.trainSamplesPerSec)} | ${format(legacy.latencyMicros, 2)} | 1.0× | 1.0× |`);
+    rows.push(
+        `| ${c.name} | ${legacy.engine} | ${format(legacy.trainSamplesPerSec)} | ${format(legacy.latencyMicros, 2)} | 1.0× | 1.0× |`,
+    );
 }
 console.log(rows.join("\n"));
 console.log(`\nNode ${process.version}, ${process.arch}; total ${format((performance.now() - started) / 1000, 1)} s`);

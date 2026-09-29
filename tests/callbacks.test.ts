@@ -25,7 +25,11 @@ function model(learningRate = 0.01): Sequential {
 
 /** A callback that overwrites `key` in the epoch logs with scripted values (runs before the others). */
 function script(key: string, values: number[]): Callback {
-    return { onEpochEnd: (epoch: number, logs: Logs) => void (logs[key] = values[epoch]) };
+    return {
+        onEpochEnd: (epoch: number, logs: Logs) => {
+            logs[key] = values[epoch];
+        },
+    };
 }
 
 function captureWarnings<T>(fn: () => T): { result: T; warnings: string[] } {
@@ -51,7 +55,10 @@ describe("History", () => {
         assert.deepEqual(history.history.valLoss, [Number.NaN, 2.5, 2.2]);
         assert.equal(history.last("valLoss"), 2.2);
         assert.equal(history.last("nope"), undefined);
-        assert.deepEqual(history.toJSON(), { epochs: [0, 1, 2], history: { loss: [3, 2, Number.NaN], valLoss: [Number.NaN, 2.5, 2.2] } });
+        assert.deepEqual(history.toJSON(), {
+            epochs: [0, 1, 2],
+            history: { loss: [3, 2, Number.NaN], valLoss: [Number.NaN, 2.5, 2.2] },
+        });
     });
 
     it("finds the best epoch (min for losses, max for accuracy, or explicit)", () => {
@@ -61,7 +68,9 @@ describe("History", () => {
             { loss: 0.4, accuracy: 0.9 },
             { loss: 0.4, accuracy: 0.8 },
             { loss: 0.6, accuracy: 0.9 },
-        ].forEach((logs, epoch) => history.append(epoch, logs));
+        ].forEach((logs, epoch) => {
+            history.append(epoch, logs);
+        });
         assert.deepEqual(history.best("loss"), { epoch: 1, value: 0.4 });
         assert.deepEqual(history.best("accuracy"), { epoch: 1, value: 0.9 });
         assert.deepEqual(history.best("loss", "max"), { epoch: 0, value: 1 });
@@ -72,7 +81,10 @@ describe("History", () => {
 describe("earlyStopping", () => {
     it("stops after `patience` epochs without improvement larger than minDelta", () => {
         const stopper = earlyStopping({ monitor: "loss", patience: 3, minDelta: 0.05 });
-        const history = model().fit(X, Y, { epochs: 20, callbacks: [script("loss", [1, 0.9, 0.88, 0.87, 0.86, 0.5]), stopper] });
+        const history = model().fit(X, Y, {
+            epochs: 20,
+            callbacks: [script("loss", [1, 0.9, 0.88, 0.87, 0.86, 0.5]), stopper],
+        });
         // 0.88, 0.87, 0.86 improve on 0.9 by less than 0.05 -> stop at epoch 4.
         assert.equal(stopper.stoppedEpoch, 4);
         assert.equal(stopper.bestEpoch, 1);
@@ -105,16 +117,26 @@ describe("earlyStopping", () => {
             model().fit(X, Y, { epochs: 5, callbacks: [script("loss", [3, 2, 2.5, 1]), stopper] }),
         );
         assert.equal(warnings.length, 1);
-        assert.match(warnings[0], /"valLoss" is not available because fit\(\) has no validation data; monitoring "loss" instead/);
+        assert.match(
+            warnings[0],
+            /"valLoss" is not available because fit\(\) has no validation data; monitoring "loss" instead/,
+        );
         assert.equal(stopper.stoppedEpoch, 2);
     });
 
     it("rejects monitored keys that are never logged, listing the available ones", () => {
         assert.throws(
-            () => model().fit(X, Y, { epochs: 2, validationSplit: 0.25, callbacks: [earlyStopping({ monitor: "val_loss" })] }),
+            () =>
+                model().fit(X, Y, {
+                    epochs: 2,
+                    validationSplit: 0.25,
+                    callbacks: [earlyStopping({ monitor: "val_loss" })],
+                }),
             (e: unknown) =>
                 e instanceof ValidationError &&
-                /monitored value "val_loss" is not in the epoch logs. Available: loss, meanAbsoluteError, valLoss/.test(e.message),
+                /monitored value "val_loss" is not in the epoch logs. Available: loss, meanAbsoluteError, valLoss/.test(
+                    e.message,
+                ),
         );
         assert.throws(() => earlyStopping({ patience: -1 }), /"patience" must be a non-negative integer/);
         assert.throws(() => earlyStopping({ mode: "up" as never }), /"mode" must be "min", "max" or "auto"/);
@@ -135,7 +157,11 @@ describe("learningRateScheduler", () => {
         const history = model(0.2).fit(X, Y, { epochs: 3, callbacks: [learningRateScheduler((_epoch, lr) => lr / 2)] });
         assert.deepEqual(history.history.learningRate, [0.1, 0.05, 0.025]);
         assert.throws(
-            () => model().fit(X, Y, { epochs: 2, callbacks: [learningRateScheduler((epoch) => (epoch === 1 ? Number.NaN : 0.1))] }),
+            () =>
+                model().fit(X, Y, {
+                    epochs: 2,
+                    callbacks: [learningRateScheduler((epoch) => (epoch === 1 ? Number.NaN : 0.1))],
+                }),
             /schedule returned NaN for epoch 1; it must return a finite number >= 0/,
         );
         assert.throws(() => learningRateScheduler(0.1 as never), /expected a function/);
@@ -180,7 +206,13 @@ describe("progressLogger", () => {
 
     it("formats epoch lines", () => {
         assert.equal(
-            formatEpoch(3, 10, { loss: 0.123456, accuracy: 1, valLoss: 0.00001234, learningRate: 0.1, durationMs: 12.6 }),
+            formatEpoch(3, 10, {
+                loss: 0.123456,
+                accuracy: 1,
+                valLoss: 0.00001234,
+                learningRate: 0.1,
+                durationMs: 12.6,
+            }),
             "Epoch  3/10 - loss: 0.1235 - accuracy: 1.0000 - valLoss: 1.234e-5 - 13ms",
         );
         assert.equal(formatEpoch(1, 1, { loss: Number.NaN, durationMs: 0.25 }), "Epoch 1/1 - loss: NaN - 0.3ms");

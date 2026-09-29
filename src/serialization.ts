@@ -3,8 +3,8 @@
  */
 import { ValidationError } from "./core/errors.js";
 import type { JsonValue } from "./core/types.js";
-import { decodeArtifact, encodeArtifact } from "./io/index.js";
 import type { BinaryPrecision } from "./io/index.js";
+import { decodeArtifact, encodeArtifact } from "./io/index.js";
 import { Sequential } from "./model.js";
 import { checkOptions, describeValue } from "./utils.js";
 
@@ -74,7 +74,10 @@ export function serializeModel(model: Sequential, options: SerializeOptions = {}
  * model.predict([0, 1]);
  * @throws SerializationError if the data is not a valid model.
  */
-export function deserializeModel(data: string | Uint8Array | ArrayBuffer, options: DeserializeOptions = {}): Sequential {
+export function deserializeModel(
+    data: string | Uint8Array | ArrayBuffer,
+    options: DeserializeOptions = {},
+): Sequential {
     checkOptions("deserializeModel", options, ["seed"]);
     return Sequential.fromArtifact(decodeArtifact(data), options);
 }

@@ -3,8 +3,8 @@
  * feature scaling. They accept plain arrays (and Matrices) and return the same kind.
  */
 import { ShapeError, ValidationError } from "./core/errors.js";
-import { gatherRows, Matrix } from "./core/matrix.js";
 import type { MatrixLike } from "./core/matrix.js";
+import { gatherRows, Matrix } from "./core/matrix.js";
 import { Random } from "./core/random.js";
 import { booleanOption, checkOptions, describeValue } from "./utils.js";
 
@@ -34,7 +34,9 @@ export function oneHot(labels: ArrayLike<number>, numClasses?: number): number[]
     for (let i = 0; i < labels.length; i++) {
         const label = labels[i];
         if (!Number.isInteger(label) || label < 0 || label >= classes) {
-            throw new ValidationError(`oneHot: labels[${i}] = ${describeValue(label)} is not an integer class index in [0, ${classes})`);
+            throw new ValidationError(
+                `oneHot: labels[${i}] = ${describeValue(label)} is not an integer class index in [0, ${classes})`,
+            );
         }
         const row = new Array<number>(classes).fill(0);
         row[label] = 1;
@@ -57,8 +59,10 @@ export function argmax(input: readonly number[] | readonly (readonly number[])[]
         for (let r = 0; r < input.rows; r++) out[r] = argmaxOf(input.row(r));
         return out;
     }
-    if (!Array.isArray(input)) throw new ValidationError(`argmax: expected an array or a Matrix, got ${describeValue(input)}`);
-    if (input.length > 0 && Array.isArray(input[0])) return (input as readonly (readonly number[])[]).map((row) => argmaxOf(row));
+    if (!Array.isArray(input))
+        throw new ValidationError(`argmax: expected an array or a Matrix, got ${describeValue(input)}`);
+    if (input.length > 0 && Array.isArray(input[0]))
+        return (input as readonly (readonly number[])[]).map((row) => argmaxOf(row));
     if (input.length === 0) throw new ValidationError("argmax: input is empty");
     return argmaxOf(input as readonly number[]);
 }
@@ -123,7 +127,9 @@ export function trainTestSplit<X extends Samples, Y extends Samples>(
         );
     }
     if (testCount >= n) {
-        throw new ValidationError(`${where}: a test set of ${testCount} leaves no training samples out of ${n}; lower testSize`);
+        throw new ValidationError(
+            `${where}: a test set of ${testCount} leaves no training samples out of ${n}; lower testSize`,
+        );
     }
     const order = identity(n);
     if (booleanOption(where, "shuffle", options.shuffle, true)) makeRandom(where, options.seed).shuffle(order);
@@ -248,12 +254,16 @@ abstract class Scaler {
 
     protected toMatrix(x: MatrixLike, where: string): Matrix {
         if (!(x instanceof Matrix) && !Array.isArray(x)) {
-            throw new ValidationError(`${this.label}.${where}: expected number[][], number[] or a Matrix, got ${describeValue(x)}`);
+            throw new ValidationError(
+                `${this.label}.${where}: expected number[][], number[] or a Matrix, got ${describeValue(x)}`,
+            );
         }
         const m = Matrix.from(x);
         for (let i = 0; i < m.data.length; i++) {
             if (!Number.isFinite(m.data[i])) {
-                throw new ValidationError(`${this.label}.${where}: value ${m.data[i]} at index ${i} is not a finite number`);
+                throw new ValidationError(
+                    `${this.label}.${where}: value ${m.data[i]} at index ${i} is not a finite number`,
+                );
             }
         }
         return m;
@@ -344,11 +354,14 @@ export class StandardScaler extends Scaler {
     static fromJSON(json: StandardScalerJSON): StandardScaler {
         const where = "StandardScaler.fromJSON";
         if (json === null || typeof json !== "object" || json.type !== "standardScaler") {
-            throw new ValidationError(`${where}: expected { type: "standardScaler", mean, std }, got ${describeValue(json)}`);
+            throw new ValidationError(
+                `${where}: expected { type: "standardScaler", mean, std }, got ${describeValue(json)}`,
+            );
         }
         const mean = finiteArray(where, "mean", json.mean);
         const std = finiteArray(where, "std", json.std);
-        if (mean.length !== std.length) throw new ValidationError(`${where}: mean and std lengths differ (${mean.length} vs ${std.length})`);
+        if (mean.length !== std.length)
+            throw new ValidationError(`${where}: mean and std lengths differ (${mean.length} vs ${std.length})`);
         if (std.some((s) => s <= 0)) throw new ValidationError(`${where}: every std must be > 0`);
         const scaler = new StandardScaler();
         scaler.meanValues = Float64Array.from(mean);
@@ -389,7 +402,9 @@ export class MinMaxScaler extends Scaler {
             !Number.isFinite(range[1]) ||
             range[0] >= range[1]
         ) {
-            throw new ValidationError(`MinMaxScaler: "featureRange" must be [min, max] with min < max, got ${describeValue(range)}`);
+            throw new ValidationError(
+                `MinMaxScaler: "featureRange" must be [min, max] with min < max, got ${describeValue(range)}`,
+            );
         }
         this.featureRange = [range[0], range[1]];
     }
@@ -437,19 +452,28 @@ export class MinMaxScaler extends Scaler {
 
     toJSON(): MinMaxScalerJSON {
         if (!this.fitted) throw new ValidationError(`${this.label}.toJSON: call fit(x) first`);
-        return { type: "minMaxScaler", featureRange: [this.featureRange[0], this.featureRange[1]], dataMin: this.dataMin, dataMax: this.dataMax };
+        return {
+            type: "minMaxScaler",
+            featureRange: [this.featureRange[0], this.featureRange[1]],
+            dataMin: this.dataMin,
+            dataMax: this.dataMax,
+        };
     }
 
     /** Restores a scaler saved with `toJSON()`. */
     static fromJSON(json: MinMaxScalerJSON): MinMaxScaler {
         const where = "MinMaxScaler.fromJSON";
         if (json === null || typeof json !== "object" || json.type !== "minMaxScaler") {
-            throw new ValidationError(`${where}: expected { type: "minMaxScaler", featureRange, dataMin, dataMax }, got ${describeValue(json)}`);
+            throw new ValidationError(
+                `${where}: expected { type: "minMaxScaler", featureRange, dataMin, dataMax }, got ${describeValue(json)}`,
+            );
         }
         const dataMin = finiteArray(where, "dataMin", json.dataMin);
         const dataMax = finiteArray(where, "dataMax", json.dataMax);
         if (dataMin.length !== dataMax.length) {
-            throw new ValidationError(`${where}: dataMin and dataMax lengths differ (${dataMin.length} vs ${dataMax.length})`);
+            throw new ValidationError(
+                `${where}: dataMin and dataMax lengths differ (${dataMin.length} vs ${dataMax.length})`,
+            );
         }
         const scaler = new MinMaxScaler({ featureRange: json.featureRange });
         scaler.minValues = Float64Array.from(dataMin);

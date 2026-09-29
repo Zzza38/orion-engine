@@ -59,7 +59,8 @@ function gradientCheck(layer: Layer, x: Matrix, training: boolean, rng: Random, 
     for (let i = 0; i < x.data.length; i++) assertGradClose(dx.data[i], numeric(x.data, i), `dX[${i}]`);
     for (const [param, grad] of grads) {
         if (!param.trainable) continue;
-        for (let i = 0; i < grad.length; i++) assertGradClose(grad[i], numeric(param.value.data, i), `${param.name}[${i}]`);
+        for (let i = 0; i < grad.length; i++)
+            assertGradClose(grad[i], numeric(param.value.data, i), `${param.name}[${i}]`);
     }
 }
 
@@ -116,7 +117,10 @@ describe("Dense", () => {
         const layer = new Dense({ units: 2 });
         layer.build(3, new Random(1));
         layer.name = "dense_9";
-        assert.deepEqual(layer.parameters().map((p) => p.name), ["dense_9/kernel", "dense_9/bias"]);
+        assert.deepEqual(
+            layer.parameters().map((p) => p.name),
+            ["dense_9/kernel", "dense_9/bias"],
+        );
         assert.deepEqual(layer.kernel.value.shape, [3, 2]);
         assert.deepEqual(layer.bias?.value.shape, [1, 2]);
         assert.equal(layer.bias?.regularize, false);
@@ -165,7 +169,10 @@ describe("Dense", () => {
     it("validates options with actionable messages", () => {
         assert.throws(() => new Dense({ units: 0 }), /"units" must be a positive integer, got 0/);
         assert.throws(() => new Dense({ units: 2, activation: "relux" as never }), /Unknown activation "relux"/);
-        assert.throws(() => new Dense({ units: 2, kernelRegularizer: { l2: -1 } }), /"l2" must be a finite number >= 0/);
+        assert.throws(
+            () => new Dense({ units: 2, kernelRegularizer: { l2: -1 } }),
+            /"l2" must be a finite number >= 0/,
+        );
         assert.throws(() => new Dense({ units: 2, bogus: 1 } as never), /unknown option "bogus"/);
         assert.throws(() => new Dense({ units: 2, name: "a/b" }), /must not contain "\/"/);
     });
@@ -176,7 +183,8 @@ describe("Dense", () => {
         assert.throws(() => layer.backward(new Matrix(1, 2)), /backward\(\) called before forward\(\)/);
         assert.throws(
             () => layer.forward(new Matrix(1, 4), false),
-            (e: unknown) => e instanceof ShapeError && /Dense layer "d" expected input with 3 features, got 4/.test(e.message),
+            (e: unknown) =>
+                e instanceof ShapeError && /Dense layer "d" expected input with 3 features, got 4/.test(e.message),
         );
         layer.forward(new Matrix(2, 3), true);
         assert.throws(() => layer.backward(new Matrix(3, 2)), /gradient is \[3, 2\], expected \[2, 2\]/);
@@ -250,7 +258,14 @@ describe("BatchNormalization", () => {
 
     it("round-trips its config and validates options", () => {
         const config = new BatchNormalization({ name: "bn", momentum: 0.9, epsilon: 1e-5, center: false }).getConfig();
-        assert.deepEqual(config, { type: "batchNormalization", name: "bn", momentum: 0.9, epsilon: 1e-5, center: false, scale: true });
+        assert.deepEqual(config, {
+            type: "batchNormalization",
+            name: "bn",
+            momentum: 0.9,
+            epsilon: 1e-5,
+            center: false,
+            scale: true,
+        });
         assert.deepEqual(layerFromConfig(config).getConfig(), config);
         assert.throws(() => batchNormalization({ momentum: 1 }), /"momentum" must be a number in \[0, 1\)/);
         assert.throws(() => batchNormalization({ epsilon: 0 }), /"epsilon" must be a finite number > 0/);
@@ -309,7 +324,11 @@ describe("Dropout", () => {
     });
 
     it("draws masks from the layer's seeded Random", () => {
-        const masks = [1, 1, 2].map((seed) => built(dropout(0.5), 8, seed).forward(Matrix.filled(4, 8, 1), true).clone());
+        const masks = [1, 1, 2].map((seed) =>
+            built(dropout(0.5), 8, seed)
+                .forward(Matrix.filled(4, 8, 1), true)
+                .clone(),
+        );
         assert.deepEqual(masks[0].data, masks[1].data);
         assert.notDeepEqual(masks[0].data, masks[2].data);
     });
@@ -344,7 +363,8 @@ describe("layer factories and registry", () => {
     it("explains unknown types and config keys", () => {
         assert.throws(
             () => layerFromConfig({ type: "conv2d", name: "c" }),
-            (e: unknown) => e instanceof ValidationError && /Unknown layer type "conv2d". Known types: dense/.test(e.message),
+            (e: unknown) =>
+                e instanceof ValidationError && /Unknown layer type "conv2d". Known types: dense/.test(e.message),
         );
         assert.throws(() => layerFromConfig({ type: "dense", name: "d", units: 2, unit: 3 }), /unknown key "unit"/);
     });

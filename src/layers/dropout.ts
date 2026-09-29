@@ -75,7 +75,9 @@ export class Dropout extends BaseLayer {
         const rng = this.rng as Random;
         const rate = this.rate;
         const keepScale = 1 / (1 - rate);
-        const X = input.data, Y = buffers.out.data, mask = buffers.mask;
+        const X = input.data,
+            Y = buffers.out.data,
+            mask = buffers.mask;
         for (let i = 0; i < X.length; i++) {
             const m = rng.next() < rate ? 0 : keepScale;
             mask[i] = m;
@@ -91,7 +93,9 @@ export class Dropout extends BaseLayer {
         const buffers = this.lastBuffers;
         if (buffers === null) return gradOutput;
         buffers.dx ??= new Matrix(gradOutput.rows, gradOutput.cols);
-        const G = gradOutput.data, D = buffers.dx.data, mask = buffers.mask;
+        const G = gradOutput.data,
+            D = buffers.dx.data,
+            mask = buffers.mask;
         for (let i = 0; i < G.length; i++) D[i] = G[i] * mask[i];
         return buffers.dx;
     }

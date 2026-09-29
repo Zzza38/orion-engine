@@ -16,7 +16,14 @@
 import { ValidationError } from "./core/errors.js";
 import type { Optimizer } from "./core/types.js";
 import type { Sequential } from "./model.js";
-import { booleanOption, checkOptions, describeValue, nonNegativeInteger, numberOption, positiveInteger } from "./utils.js";
+import {
+    booleanOption,
+    checkOptions,
+    describeValue,
+    nonNegativeInteger,
+    numberOption,
+    positiveInteger,
+} from "./utils.js";
 
 /**
  * Flat per-epoch (or per-batch) numbers: `loss`, one entry per metric (e.g. `accuracy`),
@@ -300,7 +307,9 @@ export function earlyStopping(options: EarlyStoppingOptions = {}): EarlyStopping
 function monitorKey(where: string, value: unknown): string {
     if (value === undefined) return "valLoss";
     if (typeof value !== "string" || value.length === 0) {
-        throw new ValidationError(`${where}: "monitor" must be a log key such as "valLoss", got ${describeValue(value)}`);
+        throw new ValidationError(
+            `${where}: "monitor" must be a log key such as "valLoss", got ${describeValue(value)}`,
+        );
     }
     return value;
 }
@@ -378,7 +387,14 @@ export function reduceLROnPlateau(options: ReduceLROnPlateauOptions = {}): Callb
     const factor = numberOption(where, "factor", options.factor, 0.1, "a number in (0, 1)", (v) => v > 0 && v < 1);
     const patience = nonNegativeInteger(where, "patience", options.patience, 10);
     const cooldown = nonNegativeInteger(where, "cooldown", options.cooldown, 0);
-    const minLearningRate = numberOption(where, "minLearningRate", options.minLearningRate, 0, "a finite number >= 0", (v) => v >= 0);
+    const minLearningRate = numberOption(
+        where,
+        "minLearningRate",
+        options.minLearningRate,
+        0,
+        "a finite number >= 0",
+        (v) => v >= 0,
+    );
 
     let wait = 0;
     let cooldownLeft = 0;
@@ -435,7 +451,8 @@ export function progressLogger(options: ProgressLoggerOptions = {}): Callback {
     checkOptions(where, options, ["every", "log"]);
     const every = positiveInteger(where, "every", options.every, 1);
     const log = options.log ?? ((line: string) => console.log(line));
-    if (typeof log !== "function") throw new ValidationError(`${where}: "log" must be a function, got ${describeValue(log)}`);
+    if (typeof log !== "function")
+        throw new ValidationError(`${where}: "log" must be a function, got ${describeValue(log)}`);
     return {
         onEpochEnd(epoch, logs, ctx) {
             const n = epoch + 1;
