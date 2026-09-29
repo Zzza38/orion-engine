@@ -1,0 +1,16 @@
+/** Base class for every error thrown by Orion Engine. */
+export class OrionError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = new.target.name;
+    }
+}
+
+/** Thrown when tensor/matrix shapes do not line up. */
+export class ShapeError extends OrionError {}
+
+/** Thrown when a config, artifact, or argument is invalid. */
+export class ValidationError extends OrionError {}
+
+/** Thrown when a serialized model cannot be decoded. */
+export class SerializationError extends OrionError {}
