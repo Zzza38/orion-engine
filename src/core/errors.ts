@@ -14,3 +14,6 @@ export class ValidationError extends OrionError {}
 
 /** Thrown when a serialized model cannot be decoded. */
 export class SerializationError extends OrionError {}
+
+/** Thrown when training cannot continue, e.g. the loss became NaN or Infinity. */
+export class TrainingError extends OrionError {}

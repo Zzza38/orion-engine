@@ -1,42 +1,32 @@
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import {
-    loadNetwork,
-    loadNetworkFromFile,
-    NeuralNetwork,
-    writeNetwork,
-    writeNetworkToFile,
-} from "../src/index.js";
+/**
+ * Learn XOR, then save and reload the model.
+ *
+ *   pnpm examples
+ */
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { dense, loadModel, Sequential, saveModel } from "../src/node.js";
 
-const modelPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "xor.onn");
+const x = [
+    [0, 0],
+    [0, 1],
+    [1, 0],
+    [1, 1],
+];
+const y = [0, 1, 1, 0];
 
-const inputs = [[0, 0], [0, 1], [1, 0], [1, 1]];
-const targets = [[0], [1], [1], [0]];
+const model = new Sequential({ inputSize: 2, seed: 42, name: "xor", layers: [dense(8, "tanh"), dense(1, "sigmoid")] });
+model.compile({ loss: "bce", optimizer: { name: "adam", learningRate: 0.05 }, metrics: ["accuracy"] });
+console.log(model.summary());
 
-const network = new NeuralNetwork();
-network.addLayer(2, "linear");
-network.addLayer(4, "relu");
-network.addLayer(1, "sigmoid");
+const history = model.fit(x, y, { epochs: 300, batchSize: 4, verbose: 50 });
+console.log(`\nfinal loss ${history.last("loss")?.toFixed(4)}, accuracy ${history.last("accuracy")}`);
 
-const loss = network.train(inputs, targets, 10000, 0.3, "crossEntropy");
-console.log("final avg loss:", loss.toFixed(4));
-
-for (let i = 0; i < inputs.length; i++) {
-    const pred = network.runNetwork(inputs[i])[0];
-    console.log(`${inputs[i]} -> ${pred.toFixed(4)} (target ${targets[i]})`);
+for (const [input, output] of x.map((row) => [row, model.predict(row)] as const)) {
+    console.log(`${input.join(" xor ")} -> ${output[0].toFixed(3)}`);
 }
 
-writeNetworkToFile(network, modelPath);
-console.log("\nsaved to", modelPath);
-
-const serialized = writeNetwork(network);
-const loaded = loadNetwork(serialized);
-const fromFile = loadNetworkFromFile(modelPath);
-
-for (const [label, model] of [["memory", loaded], ["file", fromFile]] as const) {
-    console.log(`\nloaded (${label}):`);
-    for (const input of inputs) {
-        const pred = model.runNetwork(input)[0];
-        console.log(`  ${input} -> ${pred.toFixed(4)}`);
-    }
-}
+const path = join(tmpdir(), "orion-examples", "xor.onn");
+await saveModel(model, path);
+const restored = await loadModel(path);
+console.log(`\nsaved to ${path}; reloaded model predicts [1, 0] -> ${restored.predict([1, 0])[0].toFixed(3)}`);
