@@ -43,7 +43,7 @@ pnpm test
 | `pnpm check`            | Biome format + lint + import sorting check (what CI runs).                            |
 | `pnpm check:fix`        | Apply all safe Biome fixes and formatting.                                            |
 | `pnpm bench`            | Run the benchmarks in `bench/`.                                                       |
-| `pnpm examples`         | Run the XOR example.                                                                  |
+| `pnpm examples`         | Run every example in `examples/` (each in its own process; fails if any fails).       |
 | `pnpm playground:dev`   | Serve the playground at <http://localhost:8000> with rebuild on change.               |
 | `pnpm playground:build` | Bundle the playground into `docs/playground/dist/`.                                   |
 | `pnpm pack:check`       | Validate the packed package with publint and Are the Types Wrong (run after build).   |

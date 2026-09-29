@@ -73,6 +73,11 @@ jobs:
         if: ${{ matrix.coverage }}
         run: pnpm run test:coverage
 
+      # Once, on the Linux / active-LTS leg: every example must still run.
+      - name: Examples
+        if: ${{ matrix.coverage }}
+        run: pnpm examples
+
   build:
     name: Build & package
     runs-on: ubuntu-latest

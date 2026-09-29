@@ -67,7 +67,7 @@
         "check": "biome check .",
         "check:fix": "biome check --write .",
         "bench": "tsx bench/index.ts",
-        "examples": "tsx examples/xor.ts",
+        "examples": "tsx examples/run-all.ts",
         "playground:build": "esbuild docs/playground/main.ts --bundle --format=esm --platform=browser --target=es2022 --minify --sourcemap --outfile=docs/playground/dist/playground.js",
         "playground:dev": "esbuild docs/playground/main.ts --bundle --format=esm --platform=browser --target=es2022 --sourcemap --outfile=docs/playground/dist/playground.js --servedir=docs/playground --watch",
         "pack:check": "publint --strict && attw --pack . --profile esm-only",
