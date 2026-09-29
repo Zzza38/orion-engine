@@ -1,7 +1,7 @@
 /**
  * Saving and loading models as bytes or text (browser-safe; for files see `@zzza38/orion-engine/node`).
  */
-import { ValidationError } from "./core/errors.js";
+import { OrionError, SerializationError, ValidationError } from "./core/errors.js";
 import type { JsonValue } from "./core/types.js";
 import type { BinaryPrecision } from "./io/index.js";
 import { decodeArtifact, encodeArtifact } from "./io/index.js";
@@ -79,5 +79,13 @@ export function deserializeModel(
     options: DeserializeOptions = {},
 ): Sequential {
     checkOptions("deserializeModel", options, ["seed"]);
-    return Sequential.fromArtifact(decodeArtifact(data), options);
+    const artifact = decodeArtifact(data);
+    try {
+        return Sequential.fromArtifact(artifact, options);
+    } catch (error) {
+        // A well-formed file describing an impossible model (unknown layer type, weight shape
+        // mismatch, ...) is still a file that cannot be loaded: report it as one error type.
+        if (error instanceof SerializationError || !(error instanceof OrionError)) throw error;
+        throw new SerializationError(`deserializeModel: ${error.message}`, { cause: error });
+    }
 }

@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { SerializationError, ValidationError } from "../src/core/errors.js";
 import { Matrix } from "../src/core/matrix.js";
 import { Random } from "../src/core/random.js";
-import { decodeArtifact } from "../src/io/index.js";
+import { decodeArtifact, encodeArtifact } from "../src/io/index.js";
 import { activation, batchNormalization, dense, dropout } from "../src/layers/index.js";
 import { Sequential } from "../src/model.js";
 import { deserializeModel, serializeModel } from "../src/serialization.js";
@@ -194,6 +194,17 @@ describe("serializeModel / deserializeModel", () => {
         assert.throws(() => serializeModel(new Sequential({ layers: [dense(1)] })), /not built yet/);
         assert.throws(() => serializeModel({} as never), ValidationError);
         assert.throws(() => deserializeModel("not a model"), SerializationError);
+        // A well-formed file that describes an impossible model is still a SerializationError,
+        // with the underlying error attached as the cause.
+        const unknownLayer = model.toArtifact();
+        unknownLayer.layers[0] = { type: "conv2d", name: "c" };
+        assert.throws(
+            () => deserializeModel(encodeArtifact(unknownLayer, { format: "json" })),
+            (error: unknown) =>
+                error instanceof SerializationError &&
+                /Unknown layer type "conv2d"/.test(error.message) &&
+                error.cause instanceof ValidationError,
+        );
         const artifact = model.toArtifact();
         artifact.layers[0] = { type: "conv2d", name: "c" };
         assert.throws(() => Sequential.fromArtifact(artifact), /Unknown layer type "conv2d"/);

@@ -993,3 +993,46 @@ describe("Sequential: actionable errors", () => {
         assert.throws(() => model().toArtifact.call(new Sequential({ layers: [dense(1)] })), /not built yet/);
     });
 });
+
+describe("initialEpoch", () => {
+    it("numbers epochs from initialEpoch so schedules and history continue across fit calls", () => {
+        const model = xorModel();
+        const seen: number[] = [];
+        const lrs: number[] = [];
+        const callback: Callback = {
+            onEpochBegin(epoch, ctx) {
+                seen.push(epoch);
+                ctx.optimizer.learningRate = 0.1 / (epoch + 1);
+                lrs.push(ctx.optimizer.learningRate);
+            },
+        };
+        const first = model.fit(XOR_X, XOR_Y, { epochs: 3, batchSize: 4, callbacks: [callback] });
+        const second = model.fit(XOR_X, XOR_Y, { epochs: 2, batchSize: 4, initialEpoch: 3, callbacks: [callback] });
+        assert.deepEqual(seen, [0, 1, 2, 3, 4]);
+        assert.deepEqual(first.epochs, [0, 1, 2]);
+        assert.deepEqual(second.epochs, [3, 4]);
+        assert.equal(second.last("learningRate"), 0.1 / 5);
+        assert.equal(lrs.length, 5);
+    });
+
+    it("reports absolute epoch numbers to the progress logger", () => {
+        const model = xorModel();
+        const lines: string[] = [];
+        const original = console.log;
+        console.log = (line: string) => lines.push(line);
+        try {
+            model.fit(XOR_X, XOR_Y, { epochs: 2, batchSize: 4, initialEpoch: 8, verbose: true });
+        } finally {
+            console.log = original;
+        }
+        assert.equal(lines.length, 2);
+        assert.match(lines[0], /^Epoch {1,2}9\/10 /);
+        assert.match(lines[1], /^Epoch 10\/10 /);
+    });
+
+    it("rejects invalid values", () => {
+        const model = xorModel();
+        assert.throws(() => model.fit(XOR_X, XOR_Y, { initialEpoch: -1 }), /"initialEpoch" must be a non-negative integer/);
+        assert.throws(() => model.fit(XOR_X, XOR_Y, { initialEpoch: 1.5 }), /"initialEpoch" must be a non-negative integer/);
+    });
+});

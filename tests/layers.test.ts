@@ -273,6 +273,24 @@ describe("BatchNormalization", () => {
         }
     });
 
+    it("keeps a single-sample training batch out of the moving statistics", () => {
+        const layer = built(new BatchNormalization({ momentum: 0.9 }), 2);
+        layer.forward(
+            Matrix.fromArray([
+                [1, 10],
+                [3, 20],
+            ]),
+            true,
+        );
+        const [, , movingMean, movingVariance] = layer.parameters();
+        const meanBefore = movingMean.value.data.slice();
+        const varianceBefore = movingVariance.value.data.slice();
+        const y = layer.forward(Matrix.fromArray([[100, -100]]), true);
+        assert.deepEqual(movingMean.value.data, meanBefore);
+        assert.deepEqual(movingVariance.value.data, varianceBefore);
+        assert.ok(y.data.every(Number.isFinite));
+    });
+
     it("updates moving statistics with momentum and uses them at inference", () => {
         const layer = built(new BatchNormalization({ momentum: 0.9 }), 2);
         layer.name = "bn";

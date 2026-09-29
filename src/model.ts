@@ -74,8 +74,14 @@ export interface CompileOptions {
 
 /** Options for {@link Sequential.fit}. */
 export interface FitOptions {
-    /** Passes over the training data. Default 1. */
+    /** Passes over the training data in this call. Default 1. */
     epochs?: number;
+    /**
+     * Index of the first epoch, for resuming training across several `fit` calls. Epoch numbers
+     * passed to callbacks and LR schedules, and recorded in the History, start here, so a schedule
+     * continues where the previous call left off. Default 0.
+     */
+    initialEpoch?: number;
     /** Samples per gradient step. Default 32. The last batch of an epoch may be smaller. */
     batchSize?: number;
     /** Reshuffle the training samples (with the model's seeded Random) every epoch. Default true. */
@@ -123,6 +129,7 @@ const FIT_KEYS = [
     "callbacks",
     "onEpochEnd",
     "verbose",
+    "initialEpoch",
 ];
 const FIT_ASYNC_KEYS = [...FIT_KEYS, "signal", "yieldEvery"];
 const HOOKS = ["onTrainBegin", "onEpochBegin", "onBatchEnd", "onEpochEnd", "onTrainEnd"] as const;
@@ -136,6 +143,7 @@ interface FitPlan {
     readonly valX: Matrix | null;
     readonly valY: Matrix | null;
     readonly epochs: number;
+    readonly initialEpoch: number;
     readonly batchSize: number;
     readonly shuffle: boolean;
     readonly callbacks: Callback[];
@@ -891,6 +899,14 @@ export class Sequential {
             );
         }
         const epochs = positiveInteger(where, "epochs", options.epochs, 1);
+        const initialEpoch = numberOption(
+            where,
+            "initialEpoch",
+            options.initialEpoch,
+            0,
+            "a non-negative integer",
+            (v) => Number.isInteger(v) && v >= 0,
+        );
         const batchSize = positiveInteger(where, "batchSize", options.batchSize, 32);
         const shuffle = booleanOption(where, "shuffle", options.shuffle, true);
 
@@ -967,7 +983,7 @@ export class Sequential {
             if (verbose === true) callbacks.push(progressLogger());
             else callbacks.push(progressLogger({ every: positiveInteger(where, "verbose", verbose) }));
         }
-        return { x: inputs, y: targets, valX, valY, epochs, batchSize, shuffle, callbacks, async, signal };
+        return { x: inputs, y: targets, valX, valY, epochs, initialEpoch, batchSize, shuffle, callbacks, async, signal };
     }
 
     /**
@@ -984,7 +1000,9 @@ export class Sequential {
     }
 
     private *runEpochs(plan: FitPlan): Generator<unknown, History, unknown> {
-        const { x, y, valX, valY, epochs, batchSize, callbacks, signal } = plan;
+        const { x, y, valX, valY, initialEpoch, batchSize, callbacks, signal } = plan;
+        // Epoch numbers are absolute: this call runs epochs [initialEpoch, finalEpoch).
+        const finalEpoch = initialEpoch + plan.epochs;
         const optimizer = this.optimizerInstance as Optimizer;
         const metrics = this.metricList;
         const samples = x.rows;
@@ -994,7 +1012,8 @@ export class Sequential {
         const ctx: CallbackContext = {
             model: this,
             optimizer,
-            epochs,
+            epochs: finalEpoch,
+            initialEpoch,
             batchSize,
             samples,
             stepsPerEpoch: steps,
@@ -1024,7 +1043,7 @@ export class Sequential {
 
         yield* invoke(plan, "onTrainBegin", withHook("onTrainBegin"), [ctx]);
         let logs: Logs = {};
-        for (let epoch = 0; epoch < epochs; epoch++) {
+        for (let epoch = initialEpoch; epoch < finalEpoch; epoch++) {
             signal?.throwIfAborted();
             const start = now();
             yield* invoke(plan, "onEpochBegin", onEpochBegin, [epoch, ctx]);
@@ -1044,7 +1063,7 @@ export class Sequential {
                     b.x,
                     b.y,
                     b.grad,
-                    `at epoch ${epoch + 1}/${epochs}, batch ${batch + 1}/${steps}`,
+                    `at epoch ${epoch + 1}/${finalEpoch}, batch ${batch + 1}/${steps}`,
                 );
                 lossSum += loss * size;
                 let batchLogs: Logs | null = onBatchEnd.length > 0 ? { loss, size } : null;

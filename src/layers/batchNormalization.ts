@@ -155,7 +155,9 @@ export class BatchNormalization extends BaseLayer {
                     variance[j] += d * d;
                 }
             }
-            const m = this.momentum,
+            // A single sample has no spread (its batch variance is 0), so it would drag the moving
+            // variance toward 0 and break inference. Normalize with it, but keep it out of the averages.
+            const m = rows > 1 ? this.momentum : 1,
                 oneMinusM = 1 - m;
             for (let j = 0; j < n; j++) {
                 const v = variance[j] * invRows;

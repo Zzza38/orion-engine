@@ -40,8 +40,10 @@ export interface CallbackContext {
     readonly model: Sequential;
     /** The model's optimizer; its `learningRate` may be changed between steps. */
     readonly optimizer: Optimizer;
-    /** Planned number of epochs. */
+    /** Index one past the last planned epoch: `initialEpoch + epochs` of the fit call. */
     readonly epochs: number;
+    /** Index of the first epoch of this fit call (the `initialEpoch` fit option). */
+    readonly initialEpoch: number;
     readonly batchSize: number;
     /** Number of training samples (after any validation split). */
     readonly samples: number;
