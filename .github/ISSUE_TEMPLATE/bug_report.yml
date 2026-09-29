@@ -1,0 +1,67 @@
+name: Bug report
+description: Something in Orion Engine is broken or behaves unexpectedly.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please search [existing issues](https://github.com/Zzza38/orion-engine/issues) first.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected to happen instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: The smallest code snippet that reproduces the problem. Include a seed if training is involved, so the result is deterministic.
+      render: typescript
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Actual output / error
+      description: Paste the full error message, stack trace, or unexpected numbers.
+      render: shell
+
+  - type: input
+    id: version
+    attributes:
+      label: Orion Engine version
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Runtime
+      options:
+        - Node.js
+        - Browser
+        - Deno
+        - Bun
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: runtime-version
+    attributes:
+      label: Runtime version
+      description: e.g. output of `node --version`, or the browser name and version.
+      placeholder: "v24.21.0"
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "macOS 16, Windows 11, Ubuntu 24.04, ..."

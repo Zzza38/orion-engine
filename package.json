@@ -1,46 +1,85 @@
 {
-  "name": "@zzza38/orion-engine",
-  "version": "0.0.2",
-  "description": "An ESM framework made for running neural networks.",
-  "keywords": [
-    "ai",
-    "ml",
-    "framework"
-  ],
-  "homepage": "https://github.com/Zzza38/orion-engine#readme",
-  "bugs": {
-    "url": "https://github.com/Zzza38/orion-engine/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Zzza38/orion-engine.git"
-  },
-  "license": "Apache-2.0",
-  "author": "Zzza38",
-  "type": "module",
-  "main": "./build/index.js",
-  "types": "./build/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./build/index.d.ts",
-      "import": "./build/index.js"
+    "name": "@zzza38/orion-engine",
+    "version": "0.1.0",
+    "description": "Zero-dependency TypeScript library for building, training and running neural networks in Node.js and the browser.",
+    "keywords": [
+        "neural-network",
+        "machine-learning",
+        "deep-learning",
+        "ml",
+        "ai",
+        "mlp",
+        "backpropagation",
+        "gradient-descent",
+        "typescript",
+        "esm",
+        "browser",
+        "zero-dependency"
+    ],
+    "homepage": "https://github.com/Zzza38/orion-engine#readme",
+    "bugs": {
+        "url": "https://github.com/Zzza38/orion-engine/issues"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/Zzza38/orion-engine.git"
+    },
+    "license": "Apache-2.0",
+    "author": "Zzza38",
+    "type": "module",
+    "sideEffects": false,
+    "main": "./build/index.js",
+    "types": "./build/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./build/index.d.ts",
+            "import": "./build/index.js"
+        },
+        "./node": {
+            "types": "./build/node.d.ts",
+            "import": "./build/node.js"
+        },
+        "./package.json": "./package.json"
+    },
+    "files": [
+        "build",
+        "src",
+        "README.md",
+        "LICENSE",
+        "NOTICE",
+        "CHANGELOG.md"
+    ],
+    "engines": {
+        "node": ">=22"
+    },
+    "packageManager": "pnpm@10.33.0",
+    "publishConfig": {
+        "access": "public"
+    },
+    "scripts": {
+        "clean": "node -e \"require('node:fs').rmSync('build',{recursive:true,force:true})\"",
+        "build": "pnpm run clean && tsc -p tsconfig.build.json",
+        "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.browser.json --noEmit",
+        "test": "tsx --test \"tests/**/*.test.ts\"",
+        "test:coverage": "tsx --test --experimental-test-coverage --test-coverage-include=\"src/**\" --test-coverage-lines=85 --test-coverage-functions=85 --test-coverage-branches=80 \"tests/**/*.test.ts\"",
+        "lint": "biome lint .",
+        "format": "biome format --write .",
+        "check": "biome check .",
+        "check:fix": "biome check --write .",
+        "bench": "tsx bench/index.ts",
+        "examples": "tsx examples/xor.ts",
+        "playground:build": "esbuild docs/playground/main.ts --bundle --format=esm --platform=browser --target=es2022 --minify --sourcemap --outfile=docs/playground/dist/playground.js",
+        "playground:dev": "esbuild docs/playground/main.ts --bundle --format=esm --platform=browser --target=es2022 --sourcemap --outfile=docs/playground/dist/playground.js --servedir=docs/playground --watch",
+        "pack:check": "publint --strict && attw --pack . --profile esm-only",
+        "prepublishOnly": "pnpm run check && pnpm run typecheck && pnpm test && pnpm run build"
+    },
+    "devDependencies": {
+        "@arethetypeswrong/cli": "^0.18.5",
+        "@biomejs/biome": "2.5.14",
+        "@types/node": "^22.20.4",
+        "esbuild": "^0.28.2",
+        "publint": "^0.3.24",
+        "tsx": "^4.23.15",
+        "typescript": "^7.0.2"
     }
-  },
-  "files": [
-    "build"
-  ],
-  "publishConfig": {
-    "access": "public"
-  },
-  "scripts": {
-    "build": "tsc",
-    "dev": "tsx examples/xor.ts",
-    "prepublishOnly": "pnpm run build",
-    "test": "tsx --test tests/**/*.test.ts"
-  },
-  "devDependencies": {
-    "@types/node": "^25.5.0",
-    "tsx": "^4.20.6",
-    "typescript": "^5.9.3"
-  }
 }

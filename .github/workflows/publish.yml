@@ -2,35 +2,104 @@ name: Publish
 
 on:
   push:
-    tags:
-      - "v*"
+    tags: ["v*"]
 
 permissions:
-  id-token: write
   contents: read
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   publish:
+    name: Publish to npm
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing (OIDC) + provenance
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
         with:
-          version: 9
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          registry-url: "https://registry.npmjs.org"
-          cache: "pnpm"
-
-      - name: Upgrade npm for OIDC trusted publishing
-        run: npm install -g npm@latest
+      - name: Verify tag matches package.json version
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version ${version}"
+            exit 1
+          fi
 
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test
-      - run: pnpm build
 
-      - name: Publish to npm
-        run: npm publish --access public
+      - name: Biome (format + lint)
+        run: pnpm exec biome ci .
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Lint package
+        run: pnpm run pack:check
+
+      # Trusted publishing needs npm >= 11.5.1.
+      - name: Update npm
+        run: npm install -g npm@latest
+
+      # Everything prepublishOnly would run has already run above.
+      - name: Publish
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          dist_tag=latest
+          case "$version" in *-*) dist_tag=next ;; esac
+          npm publish --provenance --access public --tag "$dist_tag" --ignore-scripts
+
+  release:
+    name: GitHub Release
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          touch notes.md
+          if [ -f CHANGELOG.md ]; then
+            # Take everything under the "## [x.y.z]" / "## x.y.z" / "## vx.y.z" heading up to the next "## ".
+            awk -v v="$version" '
+              BEGIN { gsub(/\./, "\\.", v); pat = "^## \\[?v?" v "\\]?([^0-9A-Za-z.-]|$)" }
+              /^## / { if (found) exit; if ($0 ~ pat) { found = 1; next } }
+              found { print }
+            ' CHANGELOG.md > notes.md
+          fi
+          if [ -s notes.md ] && grep -q '[^[:space:]]' notes.md; then
+            echo "Using release notes from CHANGELOG.md:"
+            cat notes.md
+          else
+            echo "No CHANGELOG.md section for ${version}; GitHub will generate notes."
+            : > notes.md
+          fi
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          args=(--title "${GITHUB_REF_NAME}" --verify-tag)
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then args+=(--prerelease); fi
+          if [ -s notes.md ]; then args+=(--notes-file notes.md); else args+=(--generate-notes); fi
+          gh release create "${GITHUB_REF_NAME}" "${args[@]}"

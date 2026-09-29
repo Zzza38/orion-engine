@@ -1,18 +1,21 @@
 {
+    "$schema": "https://json.schemastore.org/tsconfig",
     "compilerOptions": {
         "target": "ES2022",
+        "lib": ["ES2022", "DOM", "DOM.Iterable"],
         "module": "NodeNext",
         "moduleResolution": "NodeNext",
-        "rootDir": "src",
-        "outDir": "build",
-        "declaration": true,
+        "types": ["node"],
         "strict": true,
-        "skipLibCheck": true,
+        "noImplicitOverride": true,
+        "noImplicitReturns": true,
+        "noFallthroughCasesInSwitch": true,
+        "verbatimModuleSyntax": true,
+        "isolatedModules": true,
         "resolveJsonModule": true,
-        "esModuleInterop": true,
-        "allowImportingTsExtensions": false
+        "forceConsistentCasingInFileNames": true,
+        "skipLibCheck": true,
+        "noEmit": true
     },
-    "include": [
-        "src"
-    ]
+    "include": ["src", "tests", "examples", "bench", "docs/playground/*.ts"]
 }
