@@ -371,7 +371,7 @@ cloud VM with Node.js 22.22 (single-threaded). The 0.0.x engine could only updat
 
 | Network | Engine | Train (samples/s) | Predict 1 sample (µs) |
 |---|---|--:|--:|
-| XOR 2-4-1 | orion 0.1 (batch 32) | 1,134,185 (3.3×) | 0.71 (0.9×) |
+| XOR 2-4-1 | orion 0.1 (batch 4) | 1,134,185 (3.3×) | 0.71 (0.9×) |
 | | legacy 0.0.2 (per sample) | 343,773 | 0.64 |
 | MLP 64-128-10 | orion 0.1 (batch 32) | 69,756 (4.7×) | 9.40 (3.7×) |
 | | legacy 0.0.2 (per sample) | 14,894 | 34.39 |

@@ -81,7 +81,7 @@ export class Random {
     }
 
     /** Fisher-Yates shuffle, in place. Returns the same array. */
-    shuffle<T extends { length: number; [index: number]: any }>(array: T): T {
+    shuffle<T extends { length: number; [index: number]: unknown }>(array: T): T {
         for (let i = array.length - 1; i > 0; i--) {
             const j = this.int(i + 1);
             const tmp = array[i];

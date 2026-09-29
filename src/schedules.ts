@@ -70,12 +70,14 @@ function fail(where: string, key: string, requirement: string, value: unknown): 
 }
 
 function requireRate(where: string, key: string, value: unknown): number {
-    if (typeof value !== "number" || !Number.isFinite(value) || value < 0) fail(where, key, "a finite number >= 0", value);
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0)
+        fail(where, key, "a finite number >= 0", value);
     return value;
 }
 
 function requirePositiveInteger(where: string, key: string, value: unknown): number {
-    if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) fail(where, key, "a positive integer", value);
+    if (typeof value !== "number" || !Number.isInteger(value) || value <= 0)
+        fail(where, key, "a positive integer", value);
     return value;
 }
 
@@ -136,7 +138,8 @@ export function exponentialDecay(options: ExponentialDecayOptions): LearningRate
     const initial = requireRate(where, "initial", options.initial);
     const rate = requireFactor(where, "rate", options.rate);
     const every = options.every ?? 1;
-    if (typeof every !== "number" || !Number.isFinite(every) || every <= 0) fail(where, "every", "a finite number > 0", every);
+    if (typeof every !== "number" || !Number.isFinite(every) || every <= 0)
+        fail(where, "every", "a finite number > 0", every);
     return (epoch) => {
         checkEpoch(where, epoch);
         return initial * Math.pow(rate, epoch / every);
@@ -215,8 +218,10 @@ export function piecewiseConstant(options: PiecewiseConstantOptions): LearningRa
         );
     }
     const bounds = Float64Array.from(boundaries, (b, i) => {
-        if (typeof b !== "number" || !Number.isFinite(b) || b < 0) fail(where, `boundaries[${i}]`, "a finite number >= 0", b);
-        if (i > 0 && !(b > boundaries[i - 1])) fail(where, `boundaries[${i}]`, `> boundaries[${i - 1}] (${boundaries[i - 1]})`, b);
+        if (typeof b !== "number" || !Number.isFinite(b) || b < 0)
+            fail(where, `boundaries[${i}]`, "a finite number >= 0", b);
+        if (i > 0 && !(b > boundaries[i - 1]))
+            fail(where, `boundaries[${i}]`, `> boundaries[${i - 1}] (${boundaries[i - 1]})`, b);
         return b;
     });
     const rates = Float64Array.from(values, (v, i) => requireRate(where, `values[${i}]`, v));

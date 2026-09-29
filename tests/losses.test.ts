@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { LOSS_NAMES, getLoss } from "../src/losses.js";
 import { getActivation } from "../src/activations.js";
+import { ShapeError, ValidationError } from "../src/core/errors.js";
 import { Matrix } from "../src/core/matrix.js";
 import { Random } from "../src/core/random.js";
-import { ShapeError, ValidationError } from "../src/core/errors.js";
 import type { Loss, LossIdentifier } from "../src/core/types.js";
+import { getLoss, LOSS_NAMES } from "../src/losses.js";
 
 function randomMatrix(rng: Random, rows: number, cols: number, lo: number, hi: number): Matrix {
     const m = new Matrix(rows, cols);
@@ -103,11 +103,14 @@ describe("losses: registry", () => {
     });
 
     it("rejects unknown names and bad parameters", () => {
-        assert.throws(() => getLoss("hinge" as never), (err: unknown) => {
-            assert.ok(err instanceof ValidationError);
-            for (const name of LOSS_NAMES) assert.ok(err.message.includes(name), `message lists ${name}`);
-            return true;
-        });
+        assert.throws(
+            () => getLoss("hinge" as never),
+            (err: unknown) => {
+                assert.ok(err instanceof ValidationError);
+                for (const name of LOSS_NAMES) assert.ok(err.message.includes(name), `message lists ${name}`);
+                return true;
+            },
+        );
         assert.throws(() => getLoss({ name: "nope" } as never), ValidationError);
         assert.throws(() => getLoss(undefined as never), ValidationError);
         assert.throws(() => getLoss({ name: "huber", delta: 0 }), ValidationError);
@@ -118,8 +121,14 @@ describe("losses: registry", () => {
 });
 
 describe("losses: known values", () => {
-    const p = Matrix.fromArray([[1, 2], [3, 4]]);
-    const y = Matrix.fromArray([[1, 1], [1, 1]]);
+    const p = Matrix.fromArray([
+        [1, 2],
+        [3, 4],
+    ]);
+    const y = Matrix.fromArray([
+        [1, 1],
+        [1, 1],
+    ]);
 
     it("meanSquaredError", () => {
         assertClose(getLoss("mse").compute(p, y), (0 + 1 + 4 + 9) / 4);
@@ -156,10 +165,19 @@ describe("losses: known values", () => {
     });
 
     it("categoricalCrossentropy sums over classes and averages over batch", () => {
-        const pred = Matrix.fromArray([[0.7, 0.2, 0.1], [0.1, 0.1, 0.8]]);
-        const target = Matrix.fromArray([[1, 0, 0], [0, 0, 1]]);
+        const pred = Matrix.fromArray([
+            [0.7, 0.2, 0.1],
+            [0.1, 0.1, 0.8],
+        ]);
+        const target = Matrix.fromArray([
+            [1, 0, 0],
+            [0, 0, 1],
+        ]);
         assertClose(getLoss("cce").compute(pred, target), -(Math.log(0.7) + Math.log(0.8)) / 2);
-        const soft = Matrix.fromArray([[0.5, 0.5, 0], [0, 0.25, 0.75]]);
+        const soft = Matrix.fromArray([
+            [0.5, 0.5, 0],
+            [0, 0.25, 0.75],
+        ]);
         assertClose(
             getLoss("cce").compute(pred, soft),
             -(0.5 * Math.log(0.7) + 0.5 * Math.log(0.2) + 0.25 * Math.log(0.1) + 0.75 * Math.log(0.8)) / 2,
@@ -168,14 +186,14 @@ describe("losses: known values", () => {
     });
 
     it("sparseCategoricalCrossentropy matches categorical with one-hot targets", () => {
-        const pred = Matrix.fromArray([[0.7, 0.2, 0.1], [0.1, 0.1, 0.8]]);
+        const pred = Matrix.fromArray([
+            [0.7, 0.2, 0.1],
+            [0.1, 0.1, 0.8],
+        ]);
         const indices = Matrix.fromArray([[0], [2]]);
         assertClose(getLoss("scce").compute(pred, indices), -(Math.log(0.7) + Math.log(0.8)) / 2);
         assertClose(getLoss("scce").compute(pred, indices), getLoss("cce").compute(pred, oneHot(indices, 3)));
-        assertAllClose(
-            getLoss("scce").gradient(pred, indices),
-            getLoss("cce").gradient(pred, oneHot(indices, 3)),
-        );
+        assertAllClose(getLoss("scce").gradient(pred, indices), getLoss("cce").gradient(pred, oneHot(indices, 3)));
     });
 });
 
@@ -359,7 +377,10 @@ describe("losses: buffers and validation", () => {
         assert.throws(() => scce.compute(pred, Matrix.fromArray([[0], [3]])), ValidationError);
         assert.throws(() => scce.compute(pred, Matrix.fromArray([[-1], [0]])), ValidationError);
         assert.throws(() => scce.gradient(pred, Matrix.fromArray([[0.5], [1]])), ValidationError);
-        assert.throws(() => scce.fusedGradient?.("softmax", pred, Matrix.fromArray([[0], [Number.NaN]])), ValidationError);
+        assert.throws(
+            () => scce.fusedGradient?.("softmax", pred, Matrix.fromArray([[0], [Number.NaN]])),
+            ValidationError,
+        );
         assertClose(scce.compute(pred, Matrix.fromArray([[0], [2]])), Math.log(3));
     });
 });

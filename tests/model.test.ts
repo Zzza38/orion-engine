@@ -1032,7 +1032,13 @@ describe("initialEpoch", () => {
 
     it("rejects invalid values", () => {
         const model = xorModel();
-        assert.throws(() => model.fit(XOR_X, XOR_Y, { initialEpoch: -1 }), /"initialEpoch" must be a non-negative integer/);
-        assert.throws(() => model.fit(XOR_X, XOR_Y, { initialEpoch: 1.5 }), /"initialEpoch" must be a non-negative integer/);
+        assert.throws(
+            () => model.fit(XOR_X, XOR_Y, { initialEpoch: -1 }),
+            /"initialEpoch" must be a non-negative integer/,
+        );
+        assert.throws(
+            () => model.fit(XOR_X, XOR_Y, { initialEpoch: 1.5 }),
+            /"initialEpoch" must be a non-negative integer/,
+        );
     });
 });

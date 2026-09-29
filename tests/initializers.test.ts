@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { INITIALIZER_NAMES, getInitializer } from "../src/initializers.js";
+import { ValidationError } from "../src/core/errors.js";
 import { Matrix } from "../src/core/matrix.js";
 import { Random } from "../src/core/random.js";
-import { ValidationError } from "../src/core/errors.js";
 import type { Initializer, InitializerIdentifier } from "../src/core/types.js";
+import { getInitializer, INITIALIZER_NAMES } from "../src/initializers.js";
 
 /** Standard deviation of a unit normal truncated to [-2, 2]. */
 const TRUNCATION_CORRECTION = 0.87962566103423978;
@@ -80,17 +80,24 @@ describe("initializers: registry", () => {
 
     it("reports Keras defaults in configs", () => {
         assert.deepEqual(getInitializer("constant").getConfig(), { name: "constant", value: 0 });
-        assert.deepEqual(getInitializer("randomUniform").getConfig(), { name: "randomUniform", minval: -0.05, maxval: 0.05 });
+        assert.deepEqual(getInitializer("randomUniform").getConfig(), {
+            name: "randomUniform",
+            minval: -0.05,
+            maxval: 0.05,
+        });
         assert.deepEqual(getInitializer("randomNormal").getConfig(), { name: "randomNormal", mean: 0, stddev: 0.05 });
         assert.deepEqual(getInitializer("glorotUniform").getConfig(), { name: "glorotUniform" });
     });
 
     it("rejects unknown names and bad parameters", () => {
-        assert.throws(() => getInitializer("orthogonal" as never), (err: unknown) => {
-            assert.ok(err instanceof ValidationError);
-            for (const name of INITIALIZER_NAMES) assert.ok(err.message.includes(name), `message lists ${name}`);
-            return true;
-        });
+        assert.throws(
+            () => getInitializer("orthogonal" as never),
+            (err: unknown) => {
+                assert.ok(err instanceof ValidationError);
+                for (const name of INITIALIZER_NAMES) assert.ok(err.message.includes(name), `message lists ${name}`);
+                return true;
+            },
+        );
         assert.throws(() => getInitializer({ name: "nope" } as never), ValidationError);
         assert.throws(() => getInitializer(3 as never), ValidationError);
         assert.throws(() => getInitializer({ name: "constant", value: "1" }), ValidationError);
@@ -141,7 +148,13 @@ describe("initializers: distributions", () => {
 
     it("randomNormal", () => {
         assertMoments(sample("randomNormal", rows, cols), 0, 0.05 ** 2, 0.05, "randomNormal default");
-        assertMoments(sample({ name: "randomNormal", mean: -1, stddev: 2 }, rows, cols), -1, 4, 0.05, "randomNormal custom");
+        assertMoments(
+            sample({ name: "randomNormal", mean: -1, stddev: 2 }, rows, cols),
+            -1,
+            4,
+            0.05,
+            "randomNormal custom",
+        );
     });
 
     const scaling: [InitializerIdentifier, number, "uniform" | "normal"][] = [
@@ -173,7 +186,10 @@ describe("initializers: distributions", () => {
         for (const name of ["glorotUniform", "heNormal", "lecunUniform"] as const) {
             const m = new Matrix(2, 2);
             getInitializer(name).initialize(m, 0, 0, new Random(3));
-            assert.ok(m.data.every((v) => Number.isFinite(v)), name);
+            assert.ok(
+                m.data.every((v) => Number.isFinite(v)),
+                name,
+            );
         }
     });
 });

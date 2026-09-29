@@ -21,8 +21,18 @@ import {
 
 /** Values that break naive float formatting: repeating decimals, extremes, subnormals, -0. */
 const TRICKY = [
-    0.1, 1 / 3, Math.PI, -Math.E, 0.30000000000000004, 123456789.12345679, -2.5e-8, 1e21,
-    1e-300, 5e-324, -1.7976931348623157e308, -0,
+    0.1,
+    1 / 3,
+    Math.PI,
+    -Math.E,
+    0.30000000000000004,
+    123456789.12345679,
+    -2.5e-8,
+    1e21,
+    1e-300,
+    5e-324,
+    -1.7976931348623157e308,
+    -0,
 ];
 
 /** Values that fit float32 (no overflow), for float32 tests. */
@@ -127,7 +137,7 @@ function buildContainer(header: unknown, data: Uint8Array = new Uint8Array(0)): 
 function float64Bytes(values: number[]): Uint8Array {
     const out = new Uint8Array(values.length * 8);
     const view = new DataView(out.buffer);
-    values.forEach((v, i) => view.setFloat64(i * 8, v, true));
+    for (let i = 0; i < values.length; i++) view.setFloat64(i * 8, values[i], true);
     return out;
 }
 
@@ -144,7 +154,13 @@ describe("validateArtifact", () => {
     });
 
     it("accepts empty layers/weights and omitted training/metadata", () => {
-        const artifact: ModelArtifact = { format: "orion-engine", formatVersion: 1, inputSize: 1, layers: [], weights: [] };
+        const artifact: ModelArtifact = {
+            format: "orion-engine",
+            formatVersion: 1,
+            inputSize: 1,
+            layers: [],
+            weights: [],
+        };
         assert.equal(validateArtifact(artifact), artifact);
     });
 
@@ -159,41 +175,225 @@ describe("validateArtifact", () => {
         ["an array", () => [], /artifact: expected an object/],
         ["a string", () => "model", /artifact: expected an object/],
         ["a wrong format marker", (a) => ({ ...a, format: "onnx" }), /format: expected "orion-engine", got "onnx"/],
-        ["a missing format marker", (a) => ({ ...a, format: undefined }), /format: expected "orion-engine", got undefined/],
+        [
+            "a missing format marker",
+            (a) => ({ ...a, format: undefined }),
+            /format: expected "orion-engine", got undefined/,
+        ],
         ["a newer formatVersion", (a) => ({ ...a, formatVersion: 2 }), /formatVersion 2 is newer.*upgrade/],
         ["a string formatVersion", (a) => ({ ...a, formatVersion: "1" }), /formatVersion: expected 1, got "1"/],
         ["inputSize 0", (a) => ({ ...a, inputSize: 0 }), /inputSize: expected a positive integer, got 0/],
         ["fractional inputSize", (a) => ({ ...a, inputSize: 2.5 }), /inputSize: expected a positive integer/],
         ["string inputSize", (a) => ({ ...a, inputSize: "3" }), /inputSize: expected a positive integer, got "3"/],
-        ["non-array layers", (a) => ({ ...a, layers: {} }), /layers: expected an array of layer configs, got an object/],
+        [
+            "non-array layers",
+            (a) => ({ ...a, layers: {} }),
+            /layers: expected an array of layer configs, got an object/,
+        ],
         ["a null layer", (a) => ({ ...a, layers: [null] }), /layers\[0\]: expected a layer config object, got null/],
-        ["a layer without type", (a) => { delete (a.layers[0] as Partial<LayerConfig>).type; return a; }, /layers\[0\]\.type: expected a non-empty string/],
-        ["a numeric layer name", (a) => { a.layers[1].name = 5 as never; return a; }, /layers\[1\]\.name: expected a non-empty string, got 5/],
-        ["duplicate layer names", (a) => { a.layers[1].name = "dense_1"; return a; }, /layers\[1\]\.name: duplicate layer name "dense_1"/],
-        ["NaN in a layer config", (a) => { a.layers[0].units = NaN; return a; }, /layers\[0\]\.units: expected a finite number.*got NaN/],
-        ["a function in a layer config", (a) => { a.layers[0].fn = (() => 1) as never; return a; }, /layers\[0\]\.fn: expected a JSON value.*got a function/],
-        ["a Date in a layer config", (a) => { a.layers[0].when = new Date() as never; return a; }, /layers\[0\]\.when: expected a JSON value.*got a Date/],
+        [
+            "a layer without type",
+            (a) => {
+                delete (a.layers[0] as Partial<LayerConfig>).type;
+                return a;
+            },
+            /layers\[0\]\.type: expected a non-empty string/,
+        ],
+        [
+            "a numeric layer name",
+            (a) => {
+                a.layers[1].name = 5 as never;
+                return a;
+            },
+            /layers\[1\]\.name: expected a non-empty string, got 5/,
+        ],
+        [
+            "duplicate layer names",
+            (a) => {
+                a.layers[1].name = "dense_1";
+                return a;
+            },
+            /layers\[1\]\.name: duplicate layer name "dense_1"/,
+        ],
+        [
+            "NaN in a layer config",
+            (a) => {
+                a.layers[0].units = NaN;
+                return a;
+            },
+            /layers\[0\]\.units: expected a finite number.*got NaN/,
+        ],
+        [
+            "a function in a layer config",
+            (a) => {
+                a.layers[0].fn = (() => 1) as never;
+                return a;
+            },
+            /layers\[0\]\.fn: expected a JSON value.*got a function/,
+        ],
+        [
+            "a Date in a layer config",
+            (a) => {
+                a.layers[0].when = new Date() as never;
+                return a;
+            },
+            /layers\[0\]\.when: expected a JSON value.*got a Date/,
+        ],
         ["non-array weights", (a) => ({ ...a, weights: "none" }), /weights: expected an array of weight entries/],
-        ["an empty weight name", (a) => { a.weights[0].name = ""; return a; }, /weights\[0\]\.name: expected a non-empty string, got ""/],
-        ["duplicate weight names", (a) => { a.weights[2].name = "dense_1/kernel"; return a; }, /weights\[2\]\.name: duplicate weight name "dense_1\/kernel"/],
-        ["a 1-D shape", (a) => { a.weights[0].shape = [12] as never; return a; }, /weights\[0\] \("dense_1\/kernel"\)\.shape: expected \[rows, cols\] of positive integers, got \[12\]/],
-        ["a zero dimension", (a) => { a.weights[1].shape = [0, 4]; return a; }, /weights\[1\] \("dense_1\/bias"\)\.shape: .*got \[0, 4\]/],
-        ["a fractional dimension", (a) => { a.weights[1].shape = [0.5, 8]; return a; }, /\.shape: expected \[rows, cols\] of positive integers/],
-        ["a data length mismatch", (a) => { a.weights[0].shape = [4, 4]; return a; }, /dense_1\/kernel"\)\.data: expected 16 values for shape \[4, 4\], got 12/],
-        ["string data", (a) => { a.weights[1].data = "1,2,3,4" as never; return a; }, /\.data: expected a number\[\], Float64Array or Float32Array, got "1,2,3,4"/],
-        ["Int32Array data", (a) => { a.weights[1].data = new Int32Array(4) as never; return a; }, /got a Int32Array of length 4/],
-        ["NaN in number[] data", (a) => { a.weights[1].data = [1, 2, NaN, 4]; return a; }, /dense_1\/bias"\)\.data\[2\]: expected a finite number, got NaN/],
-        ["Infinity in Float64Array data", (a) => { (a.weights[0].data as Float64Array)[5] = Infinity; return a; }, /data\[5\]: expected a finite number, got Infinity/],
-        ["a string in number[] data", (a) => { a.weights[3].data = [1, "2"] as never; return a; }, /data\[1\]: expected a finite number, got "2"/],
-        ["a sparse data array", (a) => { a.weights[3].data = new Array<number>(2); return a; }, /data\[0\]: expected a finite number, got undefined/],
-        ["training without loss", (a) => { delete (a.training as Partial<typeof a.training>)!.loss; return a; }, /training\.loss: expected a loss config object, got undefined/],
-        ["an unnamed optimizer", (a) => { a.training!.optimizer = {} as never; return a; }, /training\.optimizer\.name: expected a non-empty string/],
-        ["non-array metrics", (a) => { a.training!.metrics = "accuracy" as never; return a; }, /training\.metrics: expected an array of metric names/],
-        ["a non-string metric", (a) => { a.training!.metrics = [1] as never; return a; }, /training\.metrics\[0\]: expected a metric name string/],
+        [
+            "an empty weight name",
+            (a) => {
+                a.weights[0].name = "";
+                return a;
+            },
+            /weights\[0\]\.name: expected a non-empty string, got ""/,
+        ],
+        [
+            "duplicate weight names",
+            (a) => {
+                a.weights[2].name = "dense_1/kernel";
+                return a;
+            },
+            /weights\[2\]\.name: duplicate weight name "dense_1\/kernel"/,
+        ],
+        [
+            "a 1-D shape",
+            (a) => {
+                a.weights[0].shape = [12] as never;
+                return a;
+            },
+            /weights\[0\] \("dense_1\/kernel"\)\.shape: expected \[rows, cols\] of positive integers, got \[12\]/,
+        ],
+        [
+            "a zero dimension",
+            (a) => {
+                a.weights[1].shape = [0, 4];
+                return a;
+            },
+            /weights\[1\] \("dense_1\/bias"\)\.shape: .*got \[0, 4\]/,
+        ],
+        [
+            "a fractional dimension",
+            (a) => {
+                a.weights[1].shape = [0.5, 8];
+                return a;
+            },
+            /\.shape: expected \[rows, cols\] of positive integers/,
+        ],
+        [
+            "a data length mismatch",
+            (a) => {
+                a.weights[0].shape = [4, 4];
+                return a;
+            },
+            /dense_1\/kernel"\)\.data: expected 16 values for shape \[4, 4\], got 12/,
+        ],
+        [
+            "string data",
+            (a) => {
+                a.weights[1].data = "1,2,3,4" as never;
+                return a;
+            },
+            /\.data: expected a number\[\], Float64Array or Float32Array, got "1,2,3,4"/,
+        ],
+        [
+            "Int32Array data",
+            (a) => {
+                a.weights[1].data = new Int32Array(4) as never;
+                return a;
+            },
+            /got a Int32Array of length 4/,
+        ],
+        [
+            "NaN in number[] data",
+            (a) => {
+                a.weights[1].data = [1, 2, NaN, 4];
+                return a;
+            },
+            /dense_1\/bias"\)\.data\[2\]: expected a finite number, got NaN/,
+        ],
+        [
+            "Infinity in Float64Array data",
+            (a) => {
+                (a.weights[0].data as Float64Array)[5] = Infinity;
+                return a;
+            },
+            /data\[5\]: expected a finite number, got Infinity/,
+        ],
+        [
+            "a string in number[] data",
+            (a) => {
+                a.weights[3].data = [1, "2"] as never;
+                return a;
+            },
+            /data\[1\]: expected a finite number, got "2"/,
+        ],
+        [
+            "a sparse data array",
+            (a) => {
+                a.weights[3].data = new Array<number>(2);
+                return a;
+            },
+            /data\[0\]: expected a finite number, got undefined/,
+        ],
+        [
+            "training without loss",
+            (a) => {
+                delete (a.training as Partial<typeof a.training>)!.loss;
+                return a;
+            },
+            /training\.loss: expected a loss config object, got undefined/,
+        ],
+        [
+            "an unnamed optimizer",
+            (a) => {
+                a.training!.optimizer = {} as never;
+                return a;
+            },
+            /training\.optimizer\.name: expected a non-empty string/,
+        ],
+        [
+            "non-array metrics",
+            (a) => {
+                a.training!.metrics = "accuracy" as never;
+                return a;
+            },
+            /training\.metrics: expected an array of metric names/,
+        ],
+        [
+            "a non-string metric",
+            (a) => {
+                a.training!.metrics = [1] as never;
+                return a;
+            },
+            /training\.metrics\[0\]: expected a metric name string/,
+        ],
         ["array metadata", (a) => ({ ...a, metadata: [] }), /metadata: expected a plain object/],
-        ["Infinity in metadata", (a) => { a.metadata!.x = Infinity; return a; }, /metadata\.x: expected a finite number/],
-        ["an odd metadata key", (a) => { a.metadata!["odd key"] = NaN; return a; }, /metadata\["odd key"\]: expected a finite number/],
-        ["circular metadata", (a) => { const m = a.metadata as Record<string, unknown>; m.self = m; return a; }, /metadata\.self: circular reference/],
+        [
+            "Infinity in metadata",
+            (a) => {
+                a.metadata!.x = Infinity;
+                return a;
+            },
+            /metadata\.x: expected a finite number/,
+        ],
+        [
+            "an odd metadata key",
+            (a) => {
+                a.metadata!["odd key"] = NaN;
+                return a;
+            },
+            /metadata\["odd key"\]: expected a finite number/,
+        ],
+        [
+            "circular metadata",
+            (a) => {
+                const m = a.metadata as Record<string, unknown>;
+                m.self = m;
+                return a;
+            },
+            /metadata\.self: circular reference/,
+        ],
     ];
 
     for (const [label, mutate, message] of cases) {
@@ -233,7 +433,10 @@ describe("JSON format", () => {
         artifact.weights[0].data = Float64Array.from({ length: 12 }, (_, i) => i + 0.5);
         artifact.weights[1].data = [1, 2, 3, 4];
         const pretty = encodeJson(artifact, { pretty: true });
-        assert.match(pretty, /\n {8}0\.5, 1\.5, 2\.5, 3\.5,\n {8}4\.5, 5\.5, 6\.5, 7\.5,\n {8}8\.5, 9\.5, 10\.5, 11\.5\n {6}\]/);
+        assert.match(
+            pretty,
+            /\n {8}0\.5, 1\.5, 2\.5, 3\.5,\n {8}4\.5, 5\.5, 6\.5, 7\.5,\n {8}8\.5, 9\.5, 10\.5, 11\.5\n {6}\]/,
+        );
         assert.match(pretty, /"data": \[1, 2, 3, 4\]/);
     });
 
@@ -255,7 +458,13 @@ describe("JSON format", () => {
     });
 
     it("omits undefined training/metadata and drops unknown top-level keys", () => {
-        const artifact: ModelArtifact = { format: "orion-engine", formatVersion: 1, inputSize: 2, layers: [], weights: [] };
+        const artifact: ModelArtifact = {
+            format: "orion-engine",
+            formatVersion: 1,
+            inputSize: 2,
+            layers: [],
+            weights: [],
+        };
         const text = encodeJson({ ...artifact, extra: 1 } as ModelArtifact);
         assert.equal(text, '{"format":"orion-engine","formatVersion":1,"inputSize":2,"layers":[],"weights":[]}');
         assert.equal(encodeJson(artifact, { pretty: true }).split("\n").at(-2), '  "weights": []');
@@ -276,13 +485,19 @@ describe("JSON format", () => {
         throwsSerialization(() => decodeJson('{"format":"orion-engine","formatVersion":1}'), /inputSize/);
         throwsSerialization(() => decodeJson(42 as never), /Invalid JSON model: expected a string, got 42/);
         const text = encodeJson(sampleArtifact()).replace('"shape":[1,2]', '"shape":[1,3]');
-        throwsSerialization(() => decodeJson(text), /dense_2\/bias"\)\.data: expected 3 values for shape \[1, 3\], got 2/);
+        throwsSerialization(
+            () => decodeJson(text),
+            /dense_2\/bias"\)\.data: expected 3 values for shape \[1, 3\], got 2/,
+        );
     });
 
     it("refuses to encode an invalid artifact", () => {
         const artifact = sampleArtifact();
         (artifact.weights[0].data as Float64Array)[0] = NaN;
-        throwsSerialization(() => encodeJson(artifact), /dense_1\/kernel"\)\.data\[0\]: expected a finite number, got NaN/);
+        throwsSerialization(
+            () => encodeJson(artifact),
+            /dense_1\/kernel"\)\.data\[0\]: expected a finite number, got NaN/,
+        );
     });
 });
 
@@ -311,12 +526,15 @@ describe("binary format", () => {
         const dataStart = Math.ceil((16 + headerLength) / 8) * 8;
         for (let i = 16 + headerLength; i < dataStart; i++) assert.equal(bytes[i], 0, "header padding is zero");
         assert.equal(bytes.length, dataStart + header.dataByteLength + 4);
-        assert.deepEqual(header.weights.map((w) => [w.name, w.dtype, w.byteOffset, w.length]), [
-            ["dense_1/kernel", "float64", 0, 12],
-            ["dense_1/bias", "float64", 96, 4],
-            ["dense_2/kernel", "float64", 128, 8],
-            ["dense_2/bias", "float64", 192, 2],
-        ]);
+        assert.deepEqual(
+            header.weights.map((w) => [w.name, w.dtype, w.byteOffset, w.length]),
+            [
+                ["dense_1/kernel", "float64", 0, 12],
+                ["dense_1/bias", "float64", 96, 4],
+                ["dense_2/kernel", "float64", 128, 8],
+                ["dense_2/bias", "float64", 192, 2],
+            ],
+        );
         assert.equal(view.getFloat64(dataStart, true), MODERATE[0]);
         assert.equal(view.getUint32(bytes.length - 4, true), crc32(bytes.subarray(0, bytes.length - 4)));
     });
@@ -331,7 +549,10 @@ describe("binary format", () => {
             weights: { byteOffset: number }[];
             dataByteLength: number;
         };
-        assert.deepEqual(header.weights.map((w) => w.byteOffset), [0, 8, 24, 56]);
+        assert.deepEqual(
+            header.weights.map((w) => w.byteOffset),
+            [0, 8, 24, 56],
+        );
         assert.equal(header.dataByteLength, 64);
     });
 
@@ -348,12 +569,20 @@ describe("binary format", () => {
         const f64 = encodeBinary(artifact, { precision: "float64" });
         assertArtifactsEqual(decodeBinary(f32), artifact, assertClose32);
         assert.ok(f32.length < f64.length);
-        const headerText = new TextDecoder().decode(f32.subarray(16, 16 + new DataView(f32.buffer).getUint32(12, true)));
+        const headerText = new TextDecoder().decode(
+            f32.subarray(16, 16 + new DataView(f32.buffer).getUint32(12, true)),
+        );
         assert.equal(headerText.match(/"dtype":"float32"/g)?.length, 4);
     });
 
     it("round-trips an artifact with no layers or weights", () => {
-        const artifact: ModelArtifact = { format: "orion-engine", formatVersion: 1, inputSize: 7, layers: [], weights: [] };
+        const artifact: ModelArtifact = {
+            format: "orion-engine",
+            formatVersion: 1,
+            inputSize: 7,
+            layers: [],
+            weights: [],
+        };
         const decoded = decodeBinary(encodeBinary(artifact));
         assert.deepEqual(decoded, artifact);
     });
@@ -380,7 +609,10 @@ describe("binary format", () => {
         const bytes = encodeBinary(sampleArtifact());
         const corrupted = bytes.slice();
         corrupted[corrupted.length - 20] ^= 0x01; // inside the weight data
-        throwsSerialization(() => decodeBinary(corrupted), /CRC-32 mismatch \(stored 0x[0-9A-F]{8}, computed 0x[0-9A-F]{8}\)/);
+        throwsSerialization(
+            () => decodeBinary(corrupted),
+            /CRC-32 mismatch \(stored 0x[0-9A-F]{8}, computed 0x[0-9A-F]{8}\)/,
+        );
 
         const header = bytes.slice();
         const at = new TextDecoder().decode(header).indexOf("dense_2");
@@ -399,7 +631,10 @@ describe("binary format", () => {
 
     it("reports truncation", () => {
         const bytes = encodeBinary(sampleArtifact());
-        throwsSerialization(() => decodeBinary(bytes.subarray(0, bytes.length - 10)), /truncated: expected \d+ bytes, got \d+/);
+        throwsSerialization(
+            () => decodeBinary(bytes.subarray(0, bytes.length - 10)),
+            /truncated: expected \d+ bytes, got \d+/,
+        );
         throwsSerialization(() => decodeBinary(bytes.subarray(0, 40)), /truncated: header declares \d+ bytes/);
         throwsSerialization(() => decodeBinary(bytes.subarray(0, 12)), /truncated: 12 bytes/);
         throwsSerialization(() => decodeBinary(bytes.subarray(0, 4)), /truncated: 4 bytes/);
@@ -420,7 +655,10 @@ describe("binary format", () => {
         const wrong = bytes.slice();
         wrong[0] = 0x50;
         wrong[1] = 0x4b;
-        throwsSerialization(() => decodeBinary(wrong), /not an Orion Engine binary model: expected magic bytes 89 4F 52 49 4F 4E 0D 0A, found 50 4B/);
+        throwsSerialization(
+            () => decodeBinary(wrong),
+            /not an Orion Engine binary model: expected magic bytes 89 4F 52 49 4F 4E 0D 0A, found 50 4B/,
+        );
         throwsSerialization(() => decodeBinary(utf8(encodeJson(sampleArtifact()))), /expected magic bytes/);
         throwsSerialization(() => decodeBinary(new Uint8Array(0)), /Invalid binary model: file is empty/);
     });
@@ -454,7 +692,10 @@ describe("binary format", () => {
         assert.deepEqual(Array.from(decodeBinary(ok).weights[0].data), [1, 2]);
 
         const bad = (w: object, message: RegExp, extra: object = {}) =>
-            throwsSerialization(() => decodeBinary(buildContainer({ ...base, weights: [w], dataByteLength: 16, ...extra }, data)), message);
+            throwsSerialization(
+                () => decodeBinary(buildContainer({ ...base, weights: [w], dataByteLength: 16, ...extra }, data)),
+                message,
+            );
         bad({ ...weight, dtype: "int8" }, /header\.weights\[0\]\.dtype: expected "float32" or "float64", got "int8"/);
         bad({ ...weight, length: 3 }, /header\.weights\[0\]\.length: expected 2 \(shape \[1, 2\]\), got 3/);
         bad({ ...weight, byteOffset: 8 }, /header\.weights\[0\]: bytes \[8, 24\) lie outside the 16-byte data section/);
@@ -469,7 +710,10 @@ describe("binary format", () => {
         );
         throwsSerialization(() => decodeBinary(buildContainer([1, 2])), /header: expected a JSON object/);
         throwsSerialization(
-            () => decodeBinary(buildContainer({ ...base, weights: [weight], dataByteLength: 16 }, float64Bytes([1, NaN]))),
+            () =>
+                decodeBinary(
+                    buildContainer({ ...base, weights: [weight], dataByteLength: 16 }, float64Bytes([1, NaN])),
+                ),
             /data\[1\]: expected a finite number, got NaN/,
         );
     });
@@ -477,7 +721,10 @@ describe("binary format", () => {
     it("rejects values that overflow float32 and invalid precision options", () => {
         const artifact = sampleArtifact();
         artifact.weights[3].data = [1, 1e39];
-        throwsSerialization(() => encodeBinary(artifact), /weight "dense_2\/bias" as float32: value 1e\+39 at index 1.*float64/);
+        throwsSerialization(
+            () => encodeBinary(artifact),
+            /weight "dense_2\/bias" as float32: value 1e\+39 at index 1.*float64/,
+        );
         assert.doesNotThrow(() => encodeBinary(artifact, { precision: "float64" }));
         assert.throws(() => encodeBinary(sampleArtifact(), { precision: "float16" as never }), ValidationError);
     });
@@ -502,7 +749,13 @@ describe("legacy .onn import", () => {
                 biasInitializer: { name: "zeros" },
             },
         ]);
-        assert.deepEqual(artifact.weights.map((w) => [w.name, w.shape]), [["dense_1/kernel", [2, 2]], ["dense_1/bias", [1, 2]]]);
+        assert.deepEqual(
+            artifact.weights.map((w) => [w.name, w.shape]),
+            [
+                ["dense_1/kernel", [2, 2]],
+                ["dense_1/bias", [1, 2]],
+            ],
+        );
         // kernel [[0.71, -1.82], [-0.2, 0.95]] row-major; bias [[0.19, 0.97]].
         assert.deepEqual(Array.from(artifact.weights[0].data), [0.71, -1.82, -0.2, 0.95]);
         assert.deepEqual(Array.from(artifact.weights[1].data), [0.19, 0.97]);
@@ -512,29 +765,55 @@ describe("legacy .onn import", () => {
     });
 
     it("converts a 3-layer model that computes what the legacy engine computed", () => {
-        const text = "3:relu:2:tanh:2:leakyRelu:1:sigmoid\n" +
-            "0.1:0.2:0.3:0.4|0.5:0.6:0.7:0.8|-1:-2:3|4:5:-6|1.5:-2.5:0.25";
+        const text =
+            "3:relu:2:tanh:2:leakyRelu:1:sigmoid\n" + "0.1:0.2:0.3:0.4|0.5:0.6:0.7:0.8|-1:-2:3|4:5:-6|1.5:-2.5:0.25";
         const artifact = decodeLegacyOnn(text);
         assert.equal(artifact.inputSize, 3);
-        assert.deepEqual(artifact.layers.map((l) => [l.name, l.units, l.activation]), [
-            ["dense_1", 2, { name: "tanh" }],
-            ["dense_2", 2, { name: "leakyRelu", alpha: 0.01 }],
-            ["dense_3", 1, { name: "sigmoid" }],
-        ]);
-        const data = Object.fromEntries(artifact.weights.map((w: WeightEntry) => [w.name, [w.shape, Array.from(w.data)]]));
+        assert.deepEqual(
+            artifact.layers.map((l) => [l.name, l.units, l.activation]),
+            [
+                ["dense_1", 2, { name: "tanh" }],
+                ["dense_2", 2, { name: "leakyRelu", alpha: 0.01 }],
+                ["dense_3", 1, { name: "sigmoid" }],
+            ],
+        );
+        const data = Object.fromEntries(
+            artifact.weights.map((w: WeightEntry) => [w.name, [w.shape, Array.from(w.data)]]),
+        );
         assert.deepEqual(data, {
-            "dense_1/kernel": [[3, 2], [0.1, 0.5, 0.2, 0.6, 0.3, 0.7]],
-            "dense_1/bias": [[1, 2], [0.4, 0.8]],
-            "dense_2/kernel": [[2, 2], [-1, 4, -2, 5]],
-            "dense_2/bias": [[1, 2], [3, -6]],
-            "dense_3/kernel": [[2, 1], [1.5, -2.5]],
+            "dense_1/kernel": [
+                [3, 2],
+                [0.1, 0.5, 0.2, 0.6, 0.3, 0.7],
+            ],
+            "dense_1/bias": [
+                [1, 2],
+                [0.4, 0.8],
+            ],
+            "dense_2/kernel": [
+                [2, 2],
+                [-1, 4, -2, 5],
+            ],
+            "dense_2/bias": [
+                [1, 2],
+                [3, -6],
+            ],
+            "dense_3/kernel": [
+                [2, 1],
+                [1.5, -2.5],
+            ],
             "dense_3/bias": [[1, 1], [0.25]],
         });
 
         // Legacy semantics, straight from the neuron list: out_j = f(sum_i in_i * w_ji + b_j).
         const neurons = [
-            [[0.1, 0.2, 0.3, 0.4], [0.5, 0.6, 0.7, 0.8]],
-            [[-1, -2, 3], [4, 5, -6]],
+            [
+                [0.1, 0.2, 0.3, 0.4],
+                [0.5, 0.6, 0.7, 0.8],
+            ],
+            [
+                [-1, -2, 3],
+                [4, 5, -6],
+            ],
             [[1.5, -2.5, 0.25]],
         ];
         const fns = [Math.tanh, (x: number) => (x > 0 ? x : 0.01 * x), (x: number) => 1 / (1 + Math.exp(-x))];
@@ -562,11 +841,17 @@ describe("legacy .onn import", () => {
 
     it("maps every legacy activation, keeping legacy alpha values", () => {
         const names = ["linear", "sigmoid", "tanh", "relu", "leakyRelu", "elu", "softmax", "swish"];
-        const text = `1:linear:${names.map((n) => `1:${n}`).join(":")}\n` + names.map(() => "0.5:0.5").join("|");
+        const text = `1:linear:${names.map((n) => `1:${n}`).join(":")}\n${names.map(() => "0.5:0.5").join("|")}`;
         const activations = decodeLegacyOnn(text).layers.map((l) => l.activation);
         assert.deepEqual(activations, [
-            { name: "linear" }, { name: "sigmoid" }, { name: "tanh" }, { name: "relu" },
-            { name: "leakyRelu", alpha: 0.01 }, { name: "elu", alpha: 1 }, { name: "softmax" }, { name: "swish" },
+            { name: "linear" },
+            { name: "sigmoid" },
+            { name: "tanh" },
+            { name: "relu" },
+            { name: "leakyRelu", alpha: 0.01 },
+            { name: "elu", alpha: 1 },
+            { name: "softmax" },
+            { name: "swish" },
         ]);
     });
 
@@ -599,22 +884,50 @@ describe("legacy .onn import", () => {
         ["an odd structure", "2:relu:1\n1:2:3", /odd number of ":"-separated fields \(3\)/],
         ["only an input layer", "2:relu\n1:2:3", /input layer and at least one more layer/],
         ["a zero input size", "0:relu:1:sigmoid\n1", /input layer: size must be a positive integer, got "0"/],
-        ["a non-numeric size", "2:relu:x:sigmoid\n1:2:3", /layer 1 \(dense_1\): size must be a positive integer, got "x"/],
+        [
+            "a non-numeric size",
+            "2:relu:x:sigmoid\n1:2:3",
+            /layer 1 \(dense_1\): size must be a positive integer, got "x"/,
+        ],
         ["a fractional size", "2:relu:1.5:sigmoid\n1:2:3", /size must be a positive integer, got "1.5"/],
-        ["an unknown activation", "2:relu:1:gelu\n1:2:3", /layer 1 \(dense_1\): unknown activation "gelu" \(expected one of linear, sigmoid/],
+        [
+            "an unknown activation",
+            "2:relu:1:gelu\n1:2:3",
+            /layer 1 \(dense_1\): unknown activation "gelu" \(expected one of linear, sigmoid/,
+        ],
         ["an empty activation", "2::1:relu\n1:2:3", /input layer: unknown activation ""/],
-        ["too few neurons", "2:relu:2:swish\n0.71:-0.2:0.19", /line 2 has only 1 neuron, but the layer sizes 2:2 require 2 neurons \(2\)/],
+        [
+            "too few neurons",
+            "2:relu:2:swish\n0.71:-0.2:0.19",
+            /line 2 has only 1 neuron, but the layer sizes 2:2 require 2 neurons \(2\)/,
+        ],
         ["too many neurons", `${DOC_EXAMPLE}|1:2:3`, /line 2 has 3 neurons, but the layer sizes 2:2 require 2 neurons/],
-        ["too few values", "2:relu:1:relu\n1:2", /dense_1 neuron 1 \(neuron 1 on the line\): expected 3 values \(2 weights \+ 1 bias\), got 2/],
-        ["too many values", "2:relu:1:relu:1:relu\n1:2:3|4:5:6", /dense_2 neuron 1 \(neuron 2 on the line\): expected 2 values \(1 weights \+ 1 bias\), got 3/],
-        ["a non-numeric weight", "2:relu:1:relu\nabc:2:3", /dense_1 neuron 1 .*weight 1: expected a finite number, got "abc"/],
+        [
+            "too few values",
+            "2:relu:1:relu\n1:2",
+            /dense_1 neuron 1 \(neuron 1 on the line\): expected 3 values \(2 weights \+ 1 bias\), got 2/,
+        ],
+        [
+            "too many values",
+            "2:relu:1:relu:1:relu\n1:2:3|4:5:6",
+            /dense_2 neuron 1 \(neuron 2 on the line\): expected 2 values \(1 weights \+ 1 bias\), got 3/,
+        ],
+        [
+            "a non-numeric weight",
+            "2:relu:1:relu\nabc:2:3",
+            /dense_1 neuron 1 .*weight 1: expected a finite number, got "abc"/,
+        ],
         ["an empty weight", "2:relu:1:relu\n1::3", /weight 2: expected a finite number, got ""/],
         ["a non-numeric bias", "2:relu:1:relu\n1:2:b", /bias: expected a finite number, got "b"/],
         ["NaN", "2:relu:1:relu\nNaN:2:3", /got "NaN"/],
         ["Infinity", "2:relu:1:relu\n1:-Infinity:3", /got "-Infinity"/],
         ["hex", "2:relu:1:relu\n0x10:2:3", /got "0x10"/],
         ["an overflowing number", "2:relu:1:relu\n1e400:2:3", /1e400 overflows a float64/],
-        ["an empty middle neuron", "2:relu:2:relu\n1:2:3| |4:5:6", /dense_1 neuron 2 \(neuron 2 on the line\) is empty \(stray "\|"\)/],
+        [
+            "an empty middle neuron",
+            "2:relu:2:relu\n1:2:3| |4:5:6",
+            /dense_1 neuron 2 \(neuron 2 on the line\) is empty \(stray "\|"\)/,
+        ],
     ];
 
     for (const [label, text, message] of malformed) {
@@ -685,7 +998,9 @@ describe("detectFormat / decodeArtifact / encodeArtifact", () => {
     });
 
     it("converts legacy → binary → JSON → artifact without loss", () => {
-        const legacy = decodeLegacyOnn("3:relu:2:tanh:2:elu:1:sigmoid\n0.1:0.2:0.3:0.4|0.5:0.6:0.7:0.8|-1:-2:3|4:5:-6|1.5:-2.5:0.25");
+        const legacy = decodeLegacyOnn(
+            "3:relu:2:tanh:2:elu:1:sigmoid\n0.1:0.2:0.3:0.4|0.5:0.6:0.7:0.8|-1:-2:3|4:5:-6|1.5:-2.5:0.25",
+        );
         const viaBinary = decodeArtifact(encodeArtifact(legacy, { format: "binary", precision: "float64" }));
         const viaJson = decodeArtifact(encodeArtifact(viaBinary, { format: "json" }));
         assertArtifactsEqual(viaJson, legacy);

@@ -10,17 +10,10 @@
  * `gradient` returns dL/dPrediction of exactly that batch-mean value (already divided by the
  * batch size). `out` may alias `prediction`.
  */
-import { Matrix } from "./core/matrix.js";
+
 import { ShapeError, ValidationError } from "./core/errors.js";
-import type {
-    ActivationName,
-    JsonValue,
-    Loss,
-    LossAlias,
-    LossConfig,
-    LossIdentifier,
-    LossName,
-} from "./core/types.js";
+import { Matrix } from "./core/matrix.js";
+import type { ActivationName, JsonValue, Loss, LossAlias, LossConfig, LossIdentifier, LossName } from "./core/types.js";
 
 /** Every built-in loss name (canonical, without aliases). */
 export const LOSS_NAMES: readonly LossName[] = Object.freeze([
@@ -51,7 +44,9 @@ const EPSILON = 1e-7;
 function prepareOut(out: Matrix | undefined, like: Matrix, op: string): Matrix {
     if (out === undefined) return new Matrix(like.rows, like.cols);
     if (out.rows !== like.rows || out.cols !== like.cols) {
-        throw new ShapeError(`${op}: output buffer is [${out.rows}, ${out.cols}], expected [${like.rows}, ${like.cols}]`);
+        throw new ShapeError(
+            `${op}: output buffer is [${out.rows}, ${out.cols}], expected [${like.rows}, ${like.cols}]`,
+        );
     }
     return out;
 }
@@ -118,7 +113,8 @@ class MeanSquaredError extends BaseLoss {
 
     compute(prediction: Matrix, target: Matrix): number {
         checkDense("meanSquaredError", prediction, target);
-        const P = prediction.data, Y = target.data;
+        const P = prediction.data,
+            Y = target.data;
         let sum = 0;
         for (let i = 0; i < P.length; i++) {
             const d = P[i] - Y[i];
@@ -130,7 +126,9 @@ class MeanSquaredError extends BaseLoss {
     gradient(prediction: Matrix, target: Matrix, out?: Matrix): Matrix {
         checkDense("meanSquaredError.gradient", prediction, target);
         const result = prepareOut(out, prediction, "meanSquaredError.gradient");
-        const P = prediction.data, Y = target.data, G = result.data;
+        const P = prediction.data,
+            Y = target.data,
+            G = result.data;
         const s = 2 / P.length;
         for (let i = 0; i < P.length; i++) G[i] = s * (P[i] - Y[i]);
         return result;
@@ -142,7 +140,8 @@ class MeanAbsoluteError extends BaseLoss {
 
     compute(prediction: Matrix, target: Matrix): number {
         checkDense("meanAbsoluteError", prediction, target);
-        const P = prediction.data, Y = target.data;
+        const P = prediction.data,
+            Y = target.data;
         let sum = 0;
         for (let i = 0; i < P.length; i++) sum += Math.abs(P[i] - Y[i]);
         return sum / P.length;
@@ -152,7 +151,9 @@ class MeanAbsoluteError extends BaseLoss {
     gradient(prediction: Matrix, target: Matrix, out?: Matrix): Matrix {
         checkDense("meanAbsoluteError.gradient", prediction, target);
         const result = prepareOut(out, prediction, "meanAbsoluteError.gradient");
-        const P = prediction.data, Y = target.data, G = result.data;
+        const P = prediction.data,
+            Y = target.data,
+            G = result.data;
         const s = 1 / P.length;
         for (let i = 0; i < P.length; i++) {
             const d = P[i] - Y[i];
@@ -171,7 +172,8 @@ class Huber extends BaseLoss {
 
     compute(prediction: Matrix, target: Matrix): number {
         checkDense("huber", prediction, target);
-        const P = prediction.data, Y = target.data;
+        const P = prediction.data,
+            Y = target.data;
         const delta = this.delta;
         let sum = 0;
         for (let i = 0; i < P.length; i++) {
@@ -184,7 +186,9 @@ class Huber extends BaseLoss {
     gradient(prediction: Matrix, target: Matrix, out?: Matrix): Matrix {
         checkDense("huber.gradient", prediction, target);
         const result = prepareOut(out, prediction, "huber.gradient");
-        const P = prediction.data, Y = target.data, G = result.data;
+        const P = prediction.data,
+            Y = target.data,
+            G = result.data;
         const delta = this.delta;
         const s = 1 / P.length;
         for (let i = 0; i < P.length; i++) {
@@ -204,7 +208,8 @@ class BinaryCrossentropy extends BaseLoss {
 
     compute(prediction: Matrix, target: Matrix): number {
         checkDense("binaryCrossentropy", prediction, target);
-        const P = prediction.data, Y = target.data;
+        const P = prediction.data,
+            Y = target.data;
         let sum = 0;
         for (let i = 0; i < P.length; i++) {
             const p = clampProbability(P[i]);
@@ -221,7 +226,9 @@ class BinaryCrossentropy extends BaseLoss {
     gradient(prediction: Matrix, target: Matrix, out?: Matrix): Matrix {
         checkDense("binaryCrossentropy.gradient", prediction, target);
         const result = prepareOut(out, prediction, "binaryCrossentropy.gradient");
-        const P = prediction.data, Y = target.data, G = result.data;
+        const P = prediction.data,
+            Y = target.data,
+            G = result.data;
         const s = 1 / P.length;
         for (let i = 0; i < P.length; i++) {
             const p = clampProbability(P[i]);
@@ -231,11 +238,18 @@ class BinaryCrossentropy extends BaseLoss {
     }
 
     /** sigmoid + binaryCrossentropy → (p - y) / (batch·units). */
-    override fusedGradient(activation: ActivationName, prediction: Matrix, target: Matrix, out?: Matrix): Matrix | null {
+    override fusedGradient(
+        activation: ActivationName,
+        prediction: Matrix,
+        target: Matrix,
+        out?: Matrix,
+    ): Matrix | null {
         if (activation !== "sigmoid") return null;
         checkDense("binaryCrossentropy.fusedGradient", prediction, target);
         const result = prepareOut(out, prediction, "binaryCrossentropy.fusedGradient");
-        const P = prediction.data, Y = target.data, G = result.data;
+        const P = prediction.data,
+            Y = target.data,
+            G = result.data;
         const s = 1 / P.length;
         for (let i = 0; i < P.length; i++) G[i] = s * (P[i] - Y[i]);
         return result;
@@ -247,7 +261,8 @@ class CategoricalCrossentropy extends BaseLoss {
 
     compute(prediction: Matrix, target: Matrix): number {
         checkDense("categoricalCrossentropy", prediction, target);
-        const P = prediction.data, Y = target.data;
+        const P = prediction.data,
+            Y = target.data;
         let sum = 0;
         for (let i = 0; i < P.length; i++) {
             const y = Y[i];
@@ -260,7 +275,9 @@ class CategoricalCrossentropy extends BaseLoss {
     gradient(prediction: Matrix, target: Matrix, out?: Matrix): Matrix {
         checkDense("categoricalCrossentropy.gradient", prediction, target);
         const result = prepareOut(out, prediction, "categoricalCrossentropy.gradient");
-        const P = prediction.data, Y = target.data, G = result.data;
+        const P = prediction.data,
+            Y = target.data,
+            G = result.data;
         const s = -1 / prediction.rows;
         for (let i = 0; i < P.length; i++) {
             const y = Y[i];
@@ -274,11 +291,18 @@ class CategoricalCrossentropy extends BaseLoss {
      * the usual targets whose rows sum to 1 (one-hot, label-smoothed), and stays exact for rows
      * that do not (soft counts, multi-hot targets).
      */
-    override fusedGradient(activation: ActivationName, prediction: Matrix, target: Matrix, out?: Matrix): Matrix | null {
+    override fusedGradient(
+        activation: ActivationName,
+        prediction: Matrix,
+        target: Matrix,
+        out?: Matrix,
+    ): Matrix | null {
         if (activation !== "softmax") return null;
         checkDense("categoricalCrossentropy.fusedGradient", prediction, target);
         const result = prepareOut(out, prediction, "categoricalCrossentropy.fusedGradient");
-        const P = prediction.data, Y = target.data, G = result.data;
+        const P = prediction.data,
+            Y = target.data,
+            G = result.data;
         const cols = prediction.cols;
         const s = 1 / prediction.rows;
         for (let base = 0; base < P.length; base += cols) {
@@ -296,7 +320,8 @@ class SparseCategoricalCrossentropy extends BaseLoss {
 
     compute(prediction: Matrix, target: Matrix): number {
         checkSparse("sparseCategoricalCrossentropy", prediction, target);
-        const P = prediction.data, T = target.data;
+        const P = prediction.data,
+            T = target.data;
         const cols = prediction.cols;
         let sum = 0;
         for (let r = 0; r < T.length; r++) sum -= Math.log(clampProbability(P[r * cols + T[r]]));
@@ -307,7 +332,9 @@ class SparseCategoricalCrossentropy extends BaseLoss {
     gradient(prediction: Matrix, target: Matrix, out?: Matrix): Matrix {
         checkSparse("sparseCategoricalCrossentropy.gradient", prediction, target);
         const result = prepareOut(out, prediction, "sparseCategoricalCrossentropy.gradient");
-        const P = prediction.data, T = target.data, G = result.data;
+        const P = prediction.data,
+            T = target.data,
+            G = result.data;
         const cols = prediction.cols;
         const s = -1 / prediction.rows;
         for (let r = 0; r < T.length; r++) {
@@ -321,11 +348,18 @@ class SparseCategoricalCrossentropy extends BaseLoss {
     }
 
     /** softmax + sparseCategoricalCrossentropy → (p - onehot(y)) / batch. */
-    override fusedGradient(activation: ActivationName, prediction: Matrix, target: Matrix, out?: Matrix): Matrix | null {
+    override fusedGradient(
+        activation: ActivationName,
+        prediction: Matrix,
+        target: Matrix,
+        out?: Matrix,
+    ): Matrix | null {
         if (activation !== "softmax") return null;
         checkSparse("sparseCategoricalCrossentropy.fusedGradient", prediction, target);
         const result = prepareOut(out, prediction, "sparseCategoricalCrossentropy.fusedGradient");
-        const P = prediction.data, T = target.data, G = result.data;
+        const P = prediction.data,
+            T = target.data,
+            G = result.data;
         const cols = prediction.cols;
         const s = 1 / prediction.rows;
         for (let r = 0; r < T.length; r++) {
@@ -354,8 +388,8 @@ const ACCEPTED_PARAMS: Record<LossName, readonly string[]> = {
 
 function resolveName(value: unknown): LossName {
     if (typeof value === "string") {
-        if (Object.prototype.hasOwnProperty.call(ACCEPTED_PARAMS, value)) return value as LossName;
-        if (Object.prototype.hasOwnProperty.call(LOSS_ALIASES, value)) return LOSS_ALIASES[value as LossAlias];
+        if (Object.hasOwn(ACCEPTED_PARAMS, value)) return value as LossName;
+        if (Object.hasOwn(LOSS_ALIASES, value)) return LOSS_ALIASES[value as LossAlias];
     }
     throw new ValidationError(
         `Unknown loss ${JSON.stringify(value)}. Valid losses: ${LOSS_NAMES.join(", ")} ` +
@@ -371,18 +405,25 @@ function create(name: LossName, params: ConfigParams): Loss {
         throw new ValidationError(`Loss "${name}": unknown parameter "${key}" (${hint})`);
     }
     switch (name) {
-        case "meanSquaredError": return new MeanSquaredError();
-        case "meanAbsoluteError": return new MeanAbsoluteError();
+        case "meanSquaredError":
+            return new MeanSquaredError();
+        case "meanAbsoluteError":
+            return new MeanAbsoluteError();
         case "huber": {
             const delta = params.delta ?? 1;
             if (typeof delta !== "number" || !Number.isFinite(delta) || delta <= 0) {
-                throw new ValidationError(`Loss "huber": "delta" must be a positive finite number, got ${JSON.stringify(delta)}`);
+                throw new ValidationError(
+                    `Loss "huber": "delta" must be a positive finite number, got ${JSON.stringify(delta)}`,
+                );
             }
             return new Huber(delta);
         }
-        case "binaryCrossentropy": return new BinaryCrossentropy();
-        case "categoricalCrossentropy": return new CategoricalCrossentropy();
-        case "sparseCategoricalCrossentropy": return new SparseCategoricalCrossentropy();
+        case "binaryCrossentropy":
+            return new BinaryCrossentropy();
+        case "categoricalCrossentropy":
+            return new CategoricalCrossentropy();
+        case "sparseCategoricalCrossentropy":
+            return new SparseCategoricalCrossentropy();
     }
 }
 

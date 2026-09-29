@@ -119,7 +119,9 @@ function parseStructure(line: string): { sizes: number[]; activations: LegacyAct
         );
     }
     if (fields.length < 4) {
-        throw legacyError("line 1 must describe an input layer and at least one more layer (e.g. \"2:linear:1:sigmoid\")");
+        throw legacyError(
+            'line 1 must describe an input layer and at least one more layer (e.g. "2:linear:1:sigmoid")',
+        );
     }
     const sizes: number[] = [];
     const activations: LegacyActivation[] = [];
@@ -135,7 +137,7 @@ function parseStructure(line: string): { sizes: number[]; activations: LegacyAct
         if (!isLegacyActivation(activation)) {
             throw legacyError(
                 `line 1, ${label}: unknown activation ${JSON.stringify(activation)} ` +
-                `(expected one of ${LEGACY_ACTIVATIONS.join(", ")})`,
+                    `(expected one of ${LEGACY_ACTIVATIONS.join(", ")})`,
             );
         }
         sizes.push(size);

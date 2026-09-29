@@ -121,7 +121,7 @@ function benchNew(c: Case, x: number[][], y: number[][]): Row {
     const sample = x[0];
     return {
         network: c.name,
-        engine: "orion 0.1 (batch 32)",
+        engine: `orion 0.1 (batch ${batchSize})`,
         trainSamplesPerSec: (c.samples * c.epochs) / seconds,
         latencyMicros: latency(() => model.predict(sample)),
     };

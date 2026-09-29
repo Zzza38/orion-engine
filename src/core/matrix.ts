@@ -185,10 +185,14 @@ function overlaps(x: Float64Array, y: Float64Array): boolean {
 /** out = a · b, where a is [m, k] and b is [k, n]. `out` must not share memory with `a` or `b`. */
 export function matmul(a: Matrix, b: Matrix, out?: Matrix): Matrix {
     if (a.cols !== b.rows) throw new ShapeError(`matmul: [${a.rows}, ${a.cols}] · [${b.rows}, ${b.cols}]`);
-    const m = a.rows, k = a.cols, n = b.cols;
+    const m = a.rows,
+        k = a.cols,
+        n = b.cols;
     const target = prepareOut(out, m, n, "matmul");
     checkNoAlias(out, a, b, "matmul");
-    const A = a.data, B = b.data, C = target.data;
+    const A = a.data,
+        B = b.data,
+        C = target.data;
     C.fill(0);
     for (let i = 0; i < m; i++) {
         const cRow = i * n;
@@ -208,13 +212,18 @@ export function matmul(a: Matrix, b: Matrix, out?: Matrix): Matrix {
  */
 export function matmulTransposeA(a: Matrix, b: Matrix, out?: Matrix): Matrix {
     if (a.rows !== b.rows) throw new ShapeError(`matmulTransposeA: [${a.rows}, ${a.cols}]ᵀ · [${b.rows}, ${b.cols}]`);
-    const k = a.rows, m = a.cols, n = b.cols;
+    const k = a.rows,
+        m = a.cols,
+        n = b.cols;
     const target = prepareOut(out, m, n, "matmulTransposeA");
     checkNoAlias(out, a, b, "matmulTransposeA");
-    const A = a.data, B = b.data, C = target.data;
+    const A = a.data,
+        B = b.data,
+        C = target.data;
     C.fill(0);
     for (let p = 0; p < k; p++) {
-        const aRow = p * m, bRow = p * n;
+        const aRow = p * m,
+            bRow = p * n;
         for (let i = 0; i < m; i++) {
             const av = A[aRow + i];
             const cRow = i * n;
@@ -230,10 +239,14 @@ export function matmulTransposeA(a: Matrix, b: Matrix, out?: Matrix): Matrix {
  */
 export function matmulTransposeB(a: Matrix, b: Matrix, out?: Matrix): Matrix {
     if (a.cols !== b.cols) throw new ShapeError(`matmulTransposeB: [${a.rows}, ${a.cols}] · [${b.rows}, ${b.cols}]ᵀ`);
-    const m = a.rows, k = a.cols, n = b.rows;
+    const m = a.rows,
+        k = a.cols,
+        n = b.rows;
     const target = prepareOut(out, m, n, "matmulTransposeB");
     checkNoAlias(out, a, b, "matmulTransposeB");
-    const A = a.data, B = b.data, C = target.data;
+    const A = a.data,
+        B = b.data,
+        C = target.data;
     for (let i = 0; i < m; i++) {
         const aRow = i * k;
         for (let j = 0; j < n; j++) {
@@ -334,7 +347,8 @@ export function gatherRows(a: Matrix, indices: ArrayLike<number>, out?: Matrix):
 
 /** Copies rows [start, end) into a new matrix. */
 export function sliceRows(a: Matrix, start: number, end: number): Matrix {
-    const s = Math.max(0, start), e = Math.min(a.rows, end);
+    const s = Math.max(0, start),
+        e = Math.min(a.rows, end);
     return new Matrix(Math.max(0, e - s), a.cols, a.data.slice(s * a.cols, e * a.cols));
 }
 

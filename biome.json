@@ -48,6 +48,16 @@
     },
     "overrides": [
         {
+            "includes": ["docs/playground/**/*.css"],
+            "linter": {
+                "rules": {
+                    "style": {
+                        "noDescendingSpecificity": "off"
+                    }
+                }
+            }
+        },
+        {
             "includes": ["tests/**", "bench/**", "examples/**"],
             "linter": {
                 "rules": {

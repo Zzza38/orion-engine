@@ -3,15 +3,7 @@ import { describe, it } from "node:test";
 import { ShapeError, ValidationError } from "../src/core/errors.js";
 import { Matrix } from "../src/core/matrix.js";
 import type { Optimizer, OptimizerConfig, Parameter } from "../src/core/types.js";
-import {
-    Adagrad,
-    Adam,
-    AdamW,
-    OPTIMIZER_NAMES,
-    RMSprop,
-    SGD,
-    getOptimizer,
-} from "../src/optimizers.js";
+import { Adagrad, Adam, AdamW, getOptimizer, OPTIMIZER_NAMES, RMSprop, SGD } from "../src/optimizers.js";
 
 // ---------------------------------------------------------------------------------------------
 // Helpers
@@ -102,7 +94,13 @@ function adamReference(o: {
     };
 }
 
-function rmspropReference(o: { lr: number; rho?: number; momentum?: number; epsilon?: number; centered?: boolean }): Reference {
+function rmspropReference(o: {
+    lr: number;
+    rho?: number;
+    momentum?: number;
+    epsilon?: number;
+    centered?: boolean;
+}): Reference {
     const rho = o.rho ?? 0.9;
     const mu = o.momentum ?? 0;
     const eps = o.epsilon ?? 1e-7;
@@ -271,7 +269,10 @@ describe("single-step updates (hand-computed)", () => {
 describe("multi-step updates match scalar reference implementations", () => {
     it("SGD (plain, momentum, Nesterov, weight decay)", () => {
         checkAgainstReference(new SGD({ learningRate: 0.05 }), sgdReference({ lr: 0.05 }));
-        checkAgainstReference(new SGD({ learningRate: 0.05, momentum: 0.8 }), sgdReference({ lr: 0.05, momentum: 0.8 }));
+        checkAgainstReference(
+            new SGD({ learningRate: 0.05, momentum: 0.8 }),
+            sgdReference({ lr: 0.05, momentum: 0.8 }),
+        );
         checkAgainstReference(
             new SGD({ learningRate: 0.05, momentum: 0.8, nesterov: true, weightDecay: 0.1 }),
             sgdReference({ lr: 0.05, momentum: 0.8, nesterov: true, weightDecay: 0.1 }),
@@ -349,7 +350,12 @@ describe("convergence", () => {
         ["Adam AMSGrad", () => new Adam({ learningRate: 0.05, amsgrad: true }), 2000, 1e-6],
         ["AdamW (no decay)", () => new AdamW({ learningRate: 0.05, weightDecay: 0 }), 2000, 1e-6],
         ["RMSprop", () => new RMSprop({ learningRate: 0.01 }), 2000, 1e-6],
-        ["RMSprop centered+momentum", () => new RMSprop({ learningRate: 0.005, centered: true, momentum: 0.5 }), 2000, 1e-2],
+        [
+            "RMSprop centered+momentum",
+            () => new RMSprop({ learningRate: 0.005, centered: true, momentum: 0.5 }),
+            2000,
+            1e-2,
+        ],
         ["Adagrad", () => new Adagrad({ learningRate: 0.5 }), 1000, 1e-6],
     ];
     for (const [label, create, steps, tolerance] of cases) {
@@ -497,7 +503,11 @@ describe("gradient clipping", () => {
     });
 
     it("adaptive optimizers see the clipped gradient", () => {
-        const raw = [[5, -0.2, 12], [-3, 0.4, 0.1], [0.05, -9, 2]];
+        const raw = [
+            [5, -0.2, 12],
+            [-3, 0.4, 0.1],
+            [0.05, -9, 2],
+        ];
         const clipped = new Adam({ learningRate: 0.1, clipNorm: 1.5, clipValue: 0.9 });
         const plain = new Adam({ learningRate: 0.1 });
         const a = makeParam([1, 2, 3]);
@@ -587,11 +597,14 @@ describe("optimizer state", () => {
         const good = makeParam([1, 2]);
         good.grad.data.set([1, 1]);
         const bad: Parameter = { ...makeParam([1, 2]), name: "bad", grad: new Matrix(2, 1) };
-        assert.throws(() => opt.step([good, bad]), (error: unknown) => {
-            assert.ok(error instanceof ShapeError);
-            assert.match(error.message, /bad/);
-            return true;
-        });
+        assert.throws(
+            () => opt.step([good, bad]),
+            (error: unknown) => {
+                assert.ok(error instanceof ShapeError);
+                assert.match(error.message, /bad/);
+                return true;
+            },
+        );
         assert.deepEqual(Array.from(good.value.data), [1, 2]);
         assert.equal(opt.iterations, 0);
     });
@@ -762,12 +775,15 @@ describe("getOptimizer", () => {
     });
 
     it("rejects unknown names, listing the valid ones", () => {
-        assert.throws(() => getOptimizer("adadelta" as never), (error: unknown) => {
-            assert.ok(error instanceof ValidationError);
-            for (const name of OPTIMIZER_NAMES) assert.ok(error.message.includes(name), error.message);
-            assert.match(error.message, /adadelta/);
-            return true;
-        });
+        assert.throws(
+            () => getOptimizer("adadelta" as never),
+            (error: unknown) => {
+                assert.ok(error instanceof ValidationError);
+                for (const name of OPTIMIZER_NAMES) assert.ok(error.message.includes(name), error.message);
+                assert.match(error.message, /adadelta/);
+                return true;
+            },
+        );
         assert.throws(() => getOptimizer({ name: "nope" } as never), ValidationError);
         assert.throws(() => getOptimizer({} as never), ValidationError);
         assert.throws(() => getOptimizer(42 as never), ValidationError);

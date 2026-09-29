@@ -5,8 +5,9 @@
  * mean of per-batch values equals the value over the whole dataset (rootMeanSquaredError is the
  * exception; average its square instead).
  */
-import type { Matrix } from "./core/matrix.js";
+
 import { ShapeError, ValidationError } from "./core/errors.js";
+import type { Matrix } from "./core/matrix.js";
 import type { Metric, MetricIdentifier, MetricName } from "./core/types.js";
 
 /** Every built-in metric name (canonical, without aliases). */
@@ -65,7 +66,8 @@ function argmax(data: Float64Array, base: number, cols: number): number {
 
 function squaredErrorMean(op: string, prediction: Matrix, target: Matrix): number {
     checkDense(op, prediction, target);
-    const P = prediction.data, Y = target.data;
+    const P = prediction.data,
+        Y = target.data;
     let sum = 0;
     for (let i = 0; i < P.length; i++) {
         const d = P[i] - Y[i];
@@ -84,10 +86,11 @@ function squaredErrorMean(op: string, prediction: Matrix, target: Matrix): numbe
  */
 function binaryAccuracy(prediction: Matrix, target: Matrix): number {
     checkDense("binaryAccuracy", prediction, target);
-    const P = prediction.data, Y = target.data;
+    const P = prediction.data,
+        Y = target.data;
     let correct = 0;
     for (let i = 0; i < P.length; i++) {
-        if ((P[i] > THRESHOLD) === (Y[i] > THRESHOLD)) correct++;
+        if (P[i] > THRESHOLD === Y[i] > THRESHOLD) correct++;
     }
     return correct / P.length;
 }
@@ -95,7 +98,8 @@ function binaryAccuracy(prediction: Matrix, target: Matrix): number {
 /** Fraction of rows where argmax(prediction) equals argmax(target). */
 function categoricalAccuracy(prediction: Matrix, target: Matrix): number {
     checkDense("categoricalAccuracy", prediction, target);
-    const P = prediction.data, Y = target.data;
+    const P = prediction.data,
+        Y = target.data;
     const cols = prediction.cols;
     let correct = 0;
     for (let base = 0; base < P.length; base += cols) {
@@ -113,7 +117,8 @@ function sparseCategoricalAccuracy(prediction: Matrix, target: Matrix): number {
             `${op}: target must be [${prediction.rows}, 1] class indices, got [${target.rows}, ${target.cols}]`,
         );
     }
-    const P = prediction.data, T = target.data;
+    const P = prediction.data,
+        T = target.data;
     const cols = prediction.cols;
     let correct = 0;
     for (let r = 0; r < T.length; r++) {
@@ -142,7 +147,8 @@ function meanSquaredError(prediction: Matrix, target: Matrix): number {
 
 function meanAbsoluteError(prediction: Matrix, target: Matrix): number {
     checkDense("meanAbsoluteError", prediction, target);
-    const P = prediction.data, Y = target.data;
+    const P = prediction.data,
+        Y = target.data;
     let sum = 0;
     for (let i = 0; i < P.length; i++) sum += Math.abs(P[i] - Y[i]);
     return sum / P.length;
@@ -168,8 +174,8 @@ const IMPLEMENTATIONS: Readonly<Record<MetricName, (prediction: Matrix, target: 
 
 function resolveName(value: unknown): MetricName {
     if (typeof value === "string") {
-        if (Object.prototype.hasOwnProperty.call(IMPLEMENTATIONS, value)) return value as MetricName;
-        if (Object.prototype.hasOwnProperty.call(METRIC_ALIASES, value)) return METRIC_ALIASES[value];
+        if (Object.hasOwn(IMPLEMENTATIONS, value)) return value as MetricName;
+        if (Object.hasOwn(METRIC_ALIASES, value)) return METRIC_ALIASES[value];
     }
     throw new ValidationError(
         `Unknown metric ${JSON.stringify(value)}. Valid metrics: ${METRIC_NAMES.join(", ")} ` +

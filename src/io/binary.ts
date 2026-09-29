@@ -70,7 +70,9 @@ const ERROR_PREFIX = "Invalid binary model";
 export function encodeBinary(artifact: ModelArtifact, options: BinaryEncodeOptions = {}): Uint8Array {
     const precision = options.precision ?? "float32";
     if (precision !== "float32" && precision !== "float64") {
-        throw new ValidationError(`encodeBinary: precision must be "float32" or "float64", got ${describeValue(precision)}`);
+        throw new ValidationError(
+            `encodeBinary: precision must be "float32" or "float64", got ${describeValue(precision)}`,
+        );
     }
     validateArtifact(artifact);
 
@@ -127,7 +129,7 @@ export function encodeBinary(artifact: ModelArtifact, options: BinaryEncodeOptio
                 if (!Number.isFinite(narrowed)) {
                     throw new SerializationError(
                         `Cannot encode weight ${JSON.stringify(name)} as float32: value ${data[i]} at index ${i} ` +
-                        `exceeds the float32 range (±3.4028234663852886e38); use precision "float64"`,
+                            `exceeds the float32 range (±3.4028234663852886e38); use precision "float64"`,
                     );
                 }
                 view.setFloat32(offset, narrowed, true);
@@ -156,7 +158,9 @@ export function decodeBinary(bytes: Uint8Array | ArrayBuffer): ModelArtifact {
     const input = toBytes(bytes, ERROR_PREFIX);
     checkMagic(input);
     if (input.length < MIN_FILE_BYTES) {
-        throw binaryError(`file is truncated: ${input.length} bytes, but even an empty container needs ${MIN_FILE_BYTES}`);
+        throw binaryError(
+            `file is truncated: ${input.length} bytes, but even an empty container needs ${MIN_FILE_BYTES}`,
+        );
     }
     const view = new DataView(input.buffer, input.byteOffset, input.byteLength);
 
@@ -165,7 +169,7 @@ export function decodeBinary(bytes: Uint8Array | ArrayBuffer): ModelArtifact {
         throw binaryError(
             version > CONTAINER_VERSION
                 ? `container version ${version} is newer than this library supports (${CONTAINER_VERSION}); ` +
-                  "upgrade @zzza38/orion-engine to read it"
+                      "upgrade @zzza38/orion-engine to read it"
                 : `unsupported container version ${version}`,
         );
     }
@@ -216,7 +220,9 @@ export function decodeBinary(bytes: Uint8Array | ArrayBuffer): ModelArtifact {
     if (headerError !== undefined) throw binaryError(`header is not valid UTF-8 JSON: ${headerError}`);
     if (!isPlainObject(header)) throw binaryError(`header: expected a JSON object, got ${describeValue(header)}`);
     if (declaredDataLength === undefined) {
-        throw binaryError(`header.dataByteLength: expected a non-negative integer, got ${describeValue(header.dataByteLength)}`);
+        throw binaryError(
+            `header.dataByteLength: expected a non-negative integer, got ${describeValue(header.dataByteLength)}`,
+        );
     }
 
     const descriptors = header.weights;
@@ -227,9 +233,12 @@ export function decodeBinary(bytes: Uint8Array | ArrayBuffer): ModelArtifact {
     for (let i = 0; i < descriptors.length; i++) {
         const path = `header.weights[${i}]`;
         const d: unknown = descriptors[i];
-        if (!isPlainObject(d)) throw binaryError(`${path}: expected a weight descriptor object, got ${describeValue(d)}`);
+        if (!isPlainObject(d))
+            throw binaryError(`${path}: expected a weight descriptor object, got ${describeValue(d)}`);
         if (!isShape(d.shape)) {
-            throw binaryError(`${path}.shape: expected [rows, cols] of positive integers, got ${describeValue(d.shape)}`);
+            throw binaryError(
+                `${path}.shape: expected [rows, cols] of positive integers, got ${describeValue(d.shape)}`,
+            );
         }
         const dtype = d.dtype;
         if (dtype !== "float32" && dtype !== "float64") {
@@ -238,7 +247,9 @@ export function decodeBinary(bytes: Uint8Array | ArrayBuffer): ModelArtifact {
         const [rows, cols] = d.shape;
         const length = rows * cols;
         if (d.length !== length) {
-            throw binaryError(`${path}.length: expected ${length} (shape [${rows}, ${cols}]), got ${describeValue(d.length)}`);
+            throw binaryError(
+                `${path}.length: expected ${length} (shape [${rows}, ${cols}]), got ${describeValue(d.length)}`,
+            );
         }
         const byteOffset = d.byteOffset;
         if (!isNonNegativeInteger(byteOffset)) {
@@ -250,7 +261,11 @@ export function decodeBinary(bytes: Uint8Array | ArrayBuffer): ModelArtifact {
                 `${path}: bytes [${byteOffset}, ${byteEnd}) lie outside the ${declaredDataLength}-byte data section`,
             );
         }
-        weights.push({ name: d.name as string, shape: [rows, cols], data: readData(view, dataStart + byteOffset, length, dtype) });
+        weights.push({
+            name: d.name as string,
+            shape: [rows, cols],
+            data: readData(view, dataStart + byteOffset, length, dtype),
+        });
     }
 
     const artifact: Record<string, unknown> = {
@@ -275,7 +290,8 @@ let crcTable: Uint32Array | undefined;
  * @returns The checksum as an unsigned 32-bit integer.
  */
 export function crc32(bytes: Uint8Array): number {
-    const table = (crcTable ??= buildCrcTable());
+    crcTable ??= buildCrcTable();
+    const table = crcTable;
     let crc = 0xffffffff;
     for (let i = 0; i < bytes.length; i++) crc = table[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
     return (crc ^ 0xffffffff) >>> 0;
@@ -325,7 +341,9 @@ function checkMagic(bytes: Uint8Array): void {
     }
     if (matches && n === MAGIC.length) return;
     if (matches) {
-        throw binaryError(`file is truncated: ${bytes.length} bytes, but even an empty container needs ${MIN_FILE_BYTES}`);
+        throw binaryError(
+            `file is truncated: ${bytes.length} bytes, but even an empty container needs ${MIN_FILE_BYTES}`,
+        );
     }
     const found = hexBytes(bytes.subarray(0, MAGIC.length));
     let signatureDamaged = bytes.length >= 6;
@@ -333,7 +351,7 @@ function checkMagic(bytes: Uint8Array): void {
     if (signatureDamaged) {
         throw binaryError(
             `damaged signature (expected ${hexBytes(MAGIC)}, found ${found}); the file was probably ` +
-            "transferred or saved in text mode (line-ending or 7-bit conversion). Transfer it as binary",
+                "transferred or saved in text mode (line-ending or 7-bit conversion). Transfer it as binary",
         );
     }
     throw binaryError(`not an Orion Engine binary model: expected magic bytes ${hexBytes(MAGIC)}, found ${found}`);

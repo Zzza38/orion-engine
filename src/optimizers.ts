@@ -151,7 +151,9 @@ export abstract class BaseOptimizer implements Optimizer {
 
     set learningRate(value: number) {
         if (typeof value !== "number" || !NON_NEGATIVE.test(value)) {
-            throw new ValidationError(`${this.label}: learningRate must be ${NON_NEGATIVE.description}, got ${describeValue(value)}`);
+            throw new ValidationError(
+                `${this.label}: learningRate must be ${NON_NEGATIVE.description}, got ${describeValue(value)}`,
+            );
         }
         this.lr = value;
     }

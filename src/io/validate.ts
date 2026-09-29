@@ -47,7 +47,7 @@ export function validateArtifact(value: unknown): ModelArtifact {
         if (typeof version === "number" && Number.isInteger(version) && version > ARTIFACT_FORMAT_VERSION) {
             throw new SerializationError(
                 `${PREFIX}: formatVersion ${version} is newer than this library supports ` +
-                `(${ARTIFACT_FORMAT_VERSION}); upgrade @zzza38/orion-engine to read it`,
+                    `(${ARTIFACT_FORMAT_VERSION}); upgrade @zzza38/orion-engine to read it`,
             );
         }
         fail("formatVersion", String(ARTIFACT_FORMAT_VERSION), version);
@@ -114,7 +114,7 @@ function validateWeights(weights: unknown): void {
         if (data.length !== expected) {
             throw new SerializationError(
                 `${PREFIX}: ${path}.data: expected ${expected} values for shape [${shape[0]}, ${shape[1]}], ` +
-                `got ${data.length}`,
+                    `got ${data.length}`,
             );
         }
         for (let k = 0; k < data.length; k++) {

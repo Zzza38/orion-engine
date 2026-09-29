@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { METRIC_NAMES, getMetric } from "../src/metrics.js";
+import { ShapeError, ValidationError } from "../src/core/errors.js";
 import { Matrix, sliceRows } from "../src/core/matrix.js";
 import { Random } from "../src/core/random.js";
-import { ShapeError, ValidationError } from "../src/core/errors.js";
 import type { Metric, MetricIdentifier } from "../src/core/types.js";
+import { getMetric, METRIC_NAMES } from "../src/metrics.js";
 
 function assertClose(actual: number, expected: number, tol = 1e-12, label = ""): void {
     assert.ok(Math.abs(actual - expected) <= tol, `${label} expected ${expected}, got ${actual}`);
@@ -48,11 +48,14 @@ describe("metrics: registry", () => {
     });
 
     it("rejects unknown names and lists the valid ones", () => {
-        assert.throws(() => getMetric("f1" as MetricIdentifier), (err: unknown) => {
-            assert.ok(err instanceof ValidationError);
-            for (const name of METRIC_NAMES) assert.ok(err.message.includes(name), `message lists ${name}`);
-            return true;
-        });
+        assert.throws(
+            () => getMetric("f1" as MetricIdentifier),
+            (err: unknown) => {
+                assert.ok(err instanceof ValidationError);
+                for (const name of METRIC_NAMES) assert.ok(err.message.includes(name), `message lists ${name}`);
+                return true;
+            },
+        );
         assert.throws(() => getMetric(null as never), ValidationError);
         assert.throws(() => getMetric({ name: "accuracy" } as never), ValidationError);
     });
@@ -61,14 +64,24 @@ describe("metrics: registry", () => {
 describe("metrics: accuracy", () => {
     const binaryPred = Matrix.fromArray([[0.9], [0.4], [0.6], [0.2]]);
     const binaryTarget = Matrix.fromArray([[1], [0], [0], [0]]);
-    const multiPred = Matrix.fromArray([[0.1, 0.9], [0.8, 0.2], [0.3, 0.7]]);
+    const multiPred = Matrix.fromArray([
+        [0.1, 0.9],
+        [0.8, 0.2],
+        [0.3, 0.7],
+    ]);
     const sparseTarget = Matrix.fromArray([[1], [1], [1]]);
 
     it("binaryAccuracy thresholds at 0.5", () => {
         assertClose(getMetric("binaryAccuracy").compute(binaryPred, binaryTarget), 0.75);
         // Element-wise over multiple outputs.
-        const pred = Matrix.fromArray([[0.9, 0.1], [0.51, 0.49]]);
-        const target = Matrix.fromArray([[1, 1], [1, 0]]);
+        const pred = Matrix.fromArray([
+            [0.9, 0.1],
+            [0.51, 0.49],
+        ]);
+        const target = Matrix.fromArray([
+            [1, 1],
+            [1, 0],
+        ]);
         assertClose(getMetric("binaryAccuracy").compute(pred, target), 0.75);
         // 0.5 itself is class 0.
         assertClose(getMetric("binaryAccuracy").compute(Matrix.fromArray([[0.5]]), Matrix.fromArray([[0]])), 1);
@@ -78,8 +91,14 @@ describe("metrics: accuracy", () => {
         const target = oneHot(sparseTarget, 2);
         assertClose(getMetric("categoricalAccuracy").compute(multiPred, target), 2 / 3);
         // Probability targets use their argmax too.
-        const soft = Matrix.fromArray([[0.2, 0.5, 0.3], [0.6, 0.3, 0.1]]);
-        const pred = Matrix.fromArray([[0, 1, 0], [0, 0, 1]]);
+        const soft = Matrix.fromArray([
+            [0.2, 0.5, 0.3],
+            [0.6, 0.3, 0.1],
+        ]);
+        const pred = Matrix.fromArray([
+            [0, 1, 0],
+            [0, 0, 1],
+        ]);
         assertClose(getMetric("categoricalAccuracy").compute(pred, soft), 0.5);
     });
 
@@ -121,8 +140,14 @@ describe("metrics: accuracy", () => {
 });
 
 describe("metrics: regression", () => {
-    const p = Matrix.fromArray([[1, 2], [3, 4]]);
-    const y = Matrix.fromArray([[1, 1], [1, 1]]);
+    const p = Matrix.fromArray([
+        [1, 2],
+        [3, 4],
+    ]);
+    const y = Matrix.fromArray([
+        [1, 1],
+        [1, 1],
+    ]);
 
     it("meanSquaredError, meanAbsoluteError, rootMeanSquaredError", () => {
         assertClose(getMetric("meanSquaredError").compute(p, y), 3.5);

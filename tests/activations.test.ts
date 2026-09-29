@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { ACTIVATION_NAMES, getActivation } from "../src/activations.js";
+import { ShapeError, ValidationError } from "../src/core/errors.js";
 import { Matrix } from "../src/core/matrix.js";
 import { Random } from "../src/core/random.js";
-import { ShapeError, ValidationError } from "../src/core/errors.js";
 import type { Activation, ActivationConfig, ActivationIdentifier } from "../src/core/types.js";
 
 function randomMatrix(rng: Random, rows: number, cols: number, lo: number, hi: number): Matrix {
@@ -85,12 +85,15 @@ describe("activations: registry", () => {
     });
 
     it("rejects unknown names and lists the valid ones", () => {
-        assert.throws(() => getActivation("nope" as never), (err: unknown) => {
-            assert.ok(err instanceof ValidationError);
-            assert.match(err.message, /nope/);
-            for (const name of ACTIVATION_NAMES) assert.ok(err.message.includes(name), `message lists ${name}`);
-            return true;
-        });
+        assert.throws(
+            () => getActivation("nope" as never),
+            (err: unknown) => {
+                assert.ok(err instanceof ValidationError);
+                assert.match(err.message, /nope/);
+                for (const name of ACTIVATION_NAMES) assert.ok(err.message.includes(name), `message lists ${name}`);
+                return true;
+            },
+        );
         assert.throws(() => getActivation({ name: "bogus" } as never), ValidationError);
         assert.throws(() => getActivation(null as never), ValidationError);
         assert.throws(() => getActivation(42 as never), ValidationError);
@@ -214,16 +217,30 @@ describe("activations: known values", () => {
 
     it("softmax is row-wise and sums to 1", () => {
         const softmax = getActivation("softmax");
-        const a = softmax.forward(Matrix.fromArray([[1, 2, 3], [0, 0, 0]]));
+        const a = softmax.forward(
+            Matrix.fromArray([
+                [1, 2, 3],
+                [0, 0, 0],
+            ]),
+        );
         const expected = [0.09003057317038046, 0.24472847105479764, 0.6652409557748219];
         for (let i = 0; i < 3; i++) assertClose(a.get(0, i), expected[i]);
         for (let i = 0; i < 3; i++) assertClose(a.get(1, i), 1 / 3);
-        for (let r = 0; r < 2; r++) assertClose(a.row(r).reduce((s, v) => s + v, 0), 1);
+        for (let r = 0; r < 2; r++)
+            assertClose(
+                a.row(r).reduce((s, v) => s + v, 0),
+                1,
+            );
     });
 
     it("softmax is shift-invariant and stable for large inputs", () => {
         const softmax = getActivation("softmax");
-        const big = softmax.forward(Matrix.fromArray([[1000, 1001, 1002], [-1000, -1001, -1002]]));
+        const big = softmax.forward(
+            Matrix.fromArray([
+                [1000, 1001, 1002],
+                [-1000, -1001, -1002],
+            ]),
+        );
         const ref = softmax.forward(Matrix.fromArray([[0, 1, 2]]));
         for (let i = 0; i < 3; i++) assertClose(big.get(0, i), ref.get(0, i));
         for (const v of big.data) assert.ok(Number.isFinite(v));
@@ -279,7 +296,11 @@ describe("activations: gradients (central finite differences)", () => {
             assertClose(d.data[i], a.data[i] * (g.data[i] - dot));
         }
         // Gradient of a softmax output sums to zero per row.
-        assertClose(d.data.reduce((s, v) => s + v, 0), 0, 1e-12);
+        assertClose(
+            d.data.reduce((s, v) => s + v, 0),
+            0,
+            1e-12,
+        );
     });
 
     it("gradients stay finite for large |z|", () => {
@@ -371,7 +392,10 @@ describe("activations: config round-trip", () => {
     it("serializes parameters", () => {
         assert.deepEqual(getActivation("leakyRelu").getConfig(), { name: "leakyRelu", alpha: 0.01 });
         assert.deepEqual(getActivation("elu").getConfig(), { name: "elu", alpha: 1 });
-        assert.deepEqual(getActivation({ name: "leakyRelu", alpha: 0.3 }).getConfig(), { name: "leakyRelu", alpha: 0.3 });
+        assert.deepEqual(getActivation({ name: "leakyRelu", alpha: 0.3 }).getConfig(), {
+            name: "leakyRelu",
+            alpha: 0.3,
+        });
         assert.deepEqual(getActivation("relu").getConfig(), { name: "relu" });
     });
 });

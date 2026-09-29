@@ -983,7 +983,19 @@ export class Sequential {
             if (verbose === true) callbacks.push(progressLogger());
             else callbacks.push(progressLogger({ every: positiveInteger(where, "verbose", verbose) }));
         }
-        return { x: inputs, y: targets, valX, valY, epochs, initialEpoch, batchSize, shuffle, callbacks, async, signal };
+        return {
+            x: inputs,
+            y: targets,
+            valX,
+            valY,
+            epochs,
+            initialEpoch,
+            batchSize,
+            shuffle,
+            callbacks,
+            async,
+            signal,
+        };
     }
 
     /**

@@ -6,9 +6,10 @@
  * limit = sqrt(3·variance); normal variants sample a normal truncated at ±2σ whose σ is divided
  * by 0.87962566103423978 so the truncated distribution still has the requested variance.
  */
+
+import { ValidationError } from "./core/errors.js";
 import type { Matrix } from "./core/matrix.js";
 import type { Random } from "./core/random.js";
-import { ValidationError } from "./core/errors.js";
 import type {
     Initializer,
     InitializerConfig,
@@ -49,7 +50,10 @@ function checkFans(name: InitializerName, fanIn: number, fanOut: number): void {
 
 /** Fills every element with one value (zeros, ones, constant). */
 class ConstantInitializer implements Initializer {
-    constructor(readonly name: "zeros" | "ones" | "constant", readonly value: number) {}
+    constructor(
+        readonly name: "zeros" | "ones" | "constant",
+        readonly value: number,
+    ) {}
 
     initialize(target: Matrix, fanIn: number, fanOut: number, _rng: Random): void {
         checkFans(this.name, fanIn, fanOut);
@@ -64,7 +68,10 @@ class ConstantInitializer implements Initializer {
 class RandomUniform implements Initializer {
     readonly name = "randomUniform" as const;
 
-    constructor(readonly minval: number, readonly maxval: number) {}
+    constructor(
+        readonly minval: number,
+        readonly maxval: number,
+    ) {}
 
     initialize(target: Matrix, fanIn: number, fanOut: number, rng: Random): void {
         checkFans(this.name, fanIn, fanOut);
@@ -81,7 +88,10 @@ class RandomUniform implements Initializer {
 class RandomNormal implements Initializer {
     readonly name = "randomNormal" as const;
 
-    constructor(readonly mean: number, readonly stddev: number) {}
+    constructor(
+        readonly mean: number,
+        readonly stddev: number,
+    ) {}
 
     initialize(target: Matrix, fanIn: number, fanOut: number, rng: Random): void {
         checkFans(this.name, fanIn, fanOut);
@@ -145,7 +155,7 @@ const ACCEPTED_PARAMS: Record<InitializerName, readonly string[]> = {
 };
 
 function isInitializerName(value: unknown): value is InitializerName {
-    return typeof value === "string" && Object.prototype.hasOwnProperty.call(ACCEPTED_PARAMS, value);
+    return typeof value === "string" && Object.hasOwn(ACCEPTED_PARAMS, value);
 }
 
 function unknownName(value: unknown): ValidationError {
@@ -158,7 +168,9 @@ function numberParam(params: ConfigParams, key: string, fallback: number, name: 
     const value = params[key];
     if (value === undefined) return fallback;
     if (typeof value !== "number" || !Number.isFinite(value)) {
-        throw new ValidationError(`Initializer "${name}": "${key}" must be a finite number, got ${JSON.stringify(value)}`);
+        throw new ValidationError(
+            `Initializer "${name}": "${key}" must be a finite number, got ${JSON.stringify(value)}`,
+        );
     }
     return value;
 }
@@ -171,14 +183,19 @@ function create(name: InitializerName, params: ConfigParams): Initializer {
         throw new ValidationError(`Initializer "${name}": unknown parameter "${key}" (${hint})`);
     }
     switch (name) {
-        case "zeros": return new ConstantInitializer("zeros", 0);
-        case "ones": return new ConstantInitializer("ones", 1);
-        case "constant": return new ConstantInitializer("constant", numberParam(params, "value", 0, name));
+        case "zeros":
+            return new ConstantInitializer("zeros", 0);
+        case "ones":
+            return new ConstantInitializer("ones", 1);
+        case "constant":
+            return new ConstantInitializer("constant", numberParam(params, "value", 0, name));
         case "randomUniform": {
             const minval = numberParam(params, "minval", -0.05, name);
             const maxval = numberParam(params, "maxval", 0.05, name);
             if (minval > maxval) {
-                throw new ValidationError(`Initializer "randomUniform": minval (${minval}) must not exceed maxval (${maxval})`);
+                throw new ValidationError(
+                    `Initializer "randomUniform": minval (${minval}) must not exceed maxval (${maxval})`,
+                );
             }
             return new RandomUniform(minval, maxval);
         }
@@ -188,12 +205,18 @@ function create(name: InitializerName, params: ConfigParams): Initializer {
             if (stddev < 0) throw new ValidationError(`Initializer "randomNormal": stddev must be >= 0, got ${stddev}`);
             return new RandomNormal(mean, stddev);
         }
-        case "glorotUniform": return new VarianceScaling(name, 1, "fanAvg", "uniform");
-        case "glorotNormal": return new VarianceScaling(name, 1, "fanAvg", "truncatedNormal");
-        case "heUniform": return new VarianceScaling(name, 2, "fanIn", "uniform");
-        case "heNormal": return new VarianceScaling(name, 2, "fanIn", "truncatedNormal");
-        case "lecunUniform": return new VarianceScaling(name, 1, "fanIn", "uniform");
-        case "lecunNormal": return new VarianceScaling(name, 1, "fanIn", "truncatedNormal");
+        case "glorotUniform":
+            return new VarianceScaling(name, 1, "fanAvg", "uniform");
+        case "glorotNormal":
+            return new VarianceScaling(name, 1, "fanAvg", "truncatedNormal");
+        case "heUniform":
+            return new VarianceScaling(name, 2, "fanIn", "uniform");
+        case "heNormal":
+            return new VarianceScaling(name, 2, "fanIn", "truncatedNormal");
+        case "lecunUniform":
+            return new VarianceScaling(name, 1, "fanIn", "uniform");
+        case "lecunNormal":
+            return new VarianceScaling(name, 1, "fanIn", "truncatedNormal");
     }
 }
 

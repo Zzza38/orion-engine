@@ -5,15 +5,10 @@
  * matching backward pass (dL/dz). Element-wise activations may be computed in place: `out` may
  * alias `z` in `forward`, and `gradOutput` (or `a`) in `backward`.
  */
-import { Matrix } from "./core/matrix.js";
+
 import { ShapeError, ValidationError } from "./core/errors.js";
-import type {
-    Activation,
-    ActivationConfig,
-    ActivationIdentifier,
-    ActivationName,
-    JsonValue,
-} from "./core/types.js";
+import { Matrix } from "./core/matrix.js";
+import type { Activation, ActivationConfig, ActivationIdentifier, ActivationName, JsonValue } from "./core/types.js";
 
 /** Every built-in activation name. */
 export const ACTIVATION_NAMES: readonly ActivationName[] = Object.freeze([
@@ -35,8 +30,8 @@ export const ACTIVATION_NAMES: readonly ActivationName[] = Object.freeze([
 ] as const);
 
 /** SELU constants from Klambauer et al. (2017), matching Keras. */
-const SELU_ALPHA = 1.6732632423543772848170429916717;
-const SELU_SCALE = 1.0507009873554804934193349852946;
+const SELU_ALPHA = 1.6732632423543772; // 1.6732632423543772848170429916717, rounded to float64
+const SELU_SCALE = 1.0507009873554805; // 1.0507009873554804934193349852946, rounded to float64
 /** sqrt(2 / π), used by the tanh approximation of GELU. */
 const GELU_C = 0.7978845608028654;
 const GELU_K = 0.044715;
@@ -48,7 +43,9 @@ const GELU_K = 0.044715;
 function prepareOut(out: Matrix | undefined, like: Matrix, op: string): Matrix {
     if (out === undefined) return new Matrix(like.rows, like.cols);
     if (out.rows !== like.rows || out.cols !== like.cols) {
-        throw new ShapeError(`${op}: output buffer is [${out.rows}, ${out.cols}], expected [${like.rows}, ${like.cols}]`);
+        throw new ShapeError(
+            `${op}: output buffer is [${out.rows}, ${out.cols}], expected [${like.rows}, ${like.cols}]`,
+        );
     }
     return out;
 }
@@ -370,7 +367,8 @@ class Softmax implements Activation {
     forward(z: Matrix, out?: Matrix): Matrix {
         const target = prepareOut(out, z, "softmax.forward");
         const cols = z.cols;
-        const Z = z.data, A = target.data;
+        const Z = z.data,
+            A = target.data;
         for (let base = 0; base < Z.length; base += cols) {
             const end = base + cols;
             let max = -Infinity;
@@ -392,7 +390,9 @@ class Softmax implements Activation {
         checkBackwardShapes(this.name, z, a, gradOutput);
         const target = prepareOut(out, z, "softmax.backward");
         const cols = a.cols;
-        const A = a.data, G = gradOutput.data, D = target.data;
+        const A = a.data,
+            G = gradOutput.data,
+            D = target.data;
         for (let base = 0; base < A.length; base += cols) {
             const end = base + cols;
             let dot = 0;
@@ -433,7 +433,7 @@ const ACCEPTED_PARAMS: Record<ActivationName, readonly string[]> = {
 };
 
 function isActivationName(value: unknown): value is ActivationName {
-    return typeof value === "string" && Object.prototype.hasOwnProperty.call(ACCEPTED_PARAMS, value);
+    return typeof value === "string" && Object.hasOwn(ACCEPTED_PARAMS, value);
 }
 
 function unknownName(value: unknown): ValidationError {
@@ -459,21 +459,36 @@ function create(name: ActivationName, params: ConfigParams): Activation {
         throw new ValidationError(`Activation "${name}": unknown parameter "${key}" (${hint})`);
     }
     switch (name) {
-        case "linear": return new Linear();
-        case "sigmoid": return new Sigmoid();
-        case "tanh": return new Tanh();
-        case "relu": return new Relu();
-        case "relu6": return new Relu6();
-        case "leakyRelu": return new LeakyRelu(numberParam(params, "alpha", 0.01, "Activation \"leakyRelu\""));
-        case "elu": return new Elu(numberParam(params, "alpha", 1.0, "Activation \"elu\""));
-        case "selu": return new Selu();
-        case "gelu": return new Gelu();
-        case "swish": return new Swish();
-        case "mish": return new Mish();
-        case "softplus": return new Softplus();
-        case "softsign": return new Softsign();
-        case "hardSigmoid": return new HardSigmoid();
-        case "softmax": return new Softmax();
+        case "linear":
+            return new Linear();
+        case "sigmoid":
+            return new Sigmoid();
+        case "tanh":
+            return new Tanh();
+        case "relu":
+            return new Relu();
+        case "relu6":
+            return new Relu6();
+        case "leakyRelu":
+            return new LeakyRelu(numberParam(params, "alpha", 0.01, 'Activation "leakyRelu"'));
+        case "elu":
+            return new Elu(numberParam(params, "alpha", 1.0, 'Activation "elu"'));
+        case "selu":
+            return new Selu();
+        case "gelu":
+            return new Gelu();
+        case "swish":
+            return new Swish();
+        case "mish":
+            return new Mish();
+        case "softplus":
+            return new Softplus();
+        case "softsign":
+            return new Softsign();
+        case "hardSigmoid":
+            return new HardSigmoid();
+        case "softmax":
+            return new Softmax();
     }
 }
 

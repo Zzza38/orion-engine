@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { ValidationError } from "../src/core/errors.js";
+import type { LearningRateSchedule } from "../src/schedules.js";
 import {
     constantSchedule,
     cosineDecay,
@@ -9,9 +10,12 @@ import {
     piecewiseConstant,
     stepDecay,
 } from "../src/schedules.js";
-import type { LearningRateSchedule } from "../src/schedules.js";
 
-function assertValues(schedule: LearningRateSchedule, expected: [epoch: number, lr: number][], tolerance = 1e-12): void {
+function assertValues(
+    schedule: LearningRateSchedule,
+    expected: [epoch: number, lr: number][],
+    tolerance = 1e-12,
+): void {
     for (const [epoch, lr] of expected) {
         const actual = schedule(epoch);
         assert.ok(Math.abs(actual - lr) <= tolerance, `epoch ${epoch}: expected ${lr}, got ${actual}`);
@@ -49,7 +53,10 @@ describe("stepDecay", () => {
     });
 
     it("factor 1 is constant", () => {
-        assertValues(stepDecay({ initial: 0.3, factor: 1, every: 1 }), [[0, 0.3], [50, 0.3]]);
+        assertValues(stepDecay({ initial: 0.3, factor: 1, every: 1 }), [
+            [0, 0.3],
+            [50, 0.3],
+        ]);
     });
 
     it("validates its options", () => {
@@ -199,7 +206,10 @@ describe("piecewiseConstant", () => {
     });
 
     it("works with no boundaries", () => {
-        assertValues(piecewiseConstant({ boundaries: [], values: [0.3] }), [[0, 0.3], [99, 0.3]]);
+        assertValues(piecewiseConstant({ boundaries: [], values: [0.3] }), [
+            [0, 0.3],
+            [99, 0.3],
+        ]);
     });
 
     it("copies its inputs", () => {
@@ -241,7 +251,13 @@ describe("epoch validation", () => {
     });
 
     it("error messages identify the schedule and the offending value", () => {
-        assert.throws(() => stepDecay({ initial: 0.1, factor: 2, every: 1 }), /stepDecay: "factor" must be a number in \(0, 1\], got 2/);
-        assert.throws(() => cosineDecay({ initial: 1, epochs: 5 })(-3), /cosineDecay: epoch must be a finite number >= 0, got -3/);
+        assert.throws(
+            () => stepDecay({ initial: 0.1, factor: 2, every: 1 }),
+            /stepDecay: "factor" must be a number in \(0, 1\], got 2/,
+        );
+        assert.throws(
+            () => cosineDecay({ initial: 1, epochs: 5 })(-3),
+            /cosineDecay: epoch must be a finite number >= 0, got -3/,
+        );
     });
 });

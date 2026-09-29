@@ -9,17 +9,17 @@
  */
 import { SerializationError, ValidationError } from "../core/errors.js";
 import type { ModelArtifact } from "../core/types.js";
-import { decodeBinary, encodeBinary, hasBinarySignature, toBytes } from "./binary.js";
 import type { BinaryEncodeOptions } from "./binary.js";
-import { decodeJson, encodeJson } from "./json.js";
+import { decodeBinary, encodeBinary, hasBinarySignature, toBytes } from "./binary.js";
 import type { JsonEncodeOptions } from "./json.js";
+import { decodeJson, encodeJson } from "./json.js";
 import { decodeLegacyOnn } from "./legacy.js";
 import { describeValue } from "./validate.js";
 
-export { crc32, decodeBinary, encodeBinary } from "./binary.js";
 export type { BinaryEncodeOptions, BinaryPrecision } from "./binary.js";
-export { decodeJson, encodeJson } from "./json.js";
+export { crc32, decodeBinary, encodeBinary } from "./binary.js";
 export type { JsonEncodeOptions } from "./json.js";
+export { decodeJson, encodeJson } from "./json.js";
 export { decodeLegacyOnn } from "./legacy.js";
 export { validateArtifact } from "./validate.js";
 
@@ -48,7 +48,7 @@ export function detectFormat(data: string | Uint8Array | ArrayBuffer): ArtifactF
         if (data.startsWith("\u0089ORION")) {
             throw new SerializationError(
                 "Unrecognized model format: this looks like a binary model that was converted to a string; " +
-                "pass the raw bytes (Uint8Array or ArrayBuffer) instead",
+                    "pass the raw bytes (Uint8Array or ArrayBuffer) instead",
             );
         }
         let i = data.charCodeAt(0) === 0xfeff ? 1 : 0;
@@ -59,7 +59,9 @@ export function detectFormat(data: string | Uint8Array | ArrayBuffer): ArtifactF
     if (hasBinarySignature(bytes)) return "binary";
     let i = bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf ? 3 : 0;
     while (i < bytes.length && isWhitespace(bytes[i])) i++;
-    const preview = Array.from(bytes.subarray(i, i + 8), (b) => b.toString(16).toUpperCase().padStart(2, "0")).join(" ");
+    const preview = Array.from(bytes.subarray(i, i + 8), (b) => b.toString(16).toUpperCase().padStart(2, "0")).join(
+        " ",
+    );
     return classifyText(i < bytes.length ? bytes[i] : -1, `bytes ${preview}`);
 }
 
@@ -88,13 +90,18 @@ export function decodeArtifact(data: string | Uint8Array | ArrayBuffer): ModelAr
  * @throws {ValidationError} If the options are invalid.
  */
 export function encodeArtifact(artifact: ModelArtifact, options: { format: "json" } & JsonEncodeOptions): string;
-export function encodeArtifact(artifact: ModelArtifact, options: { format: "binary" } & BinaryEncodeOptions): Uint8Array;
+export function encodeArtifact(
+    artifact: ModelArtifact,
+    options: { format: "binary" } & BinaryEncodeOptions,
+): Uint8Array;
 export function encodeArtifact(artifact: ModelArtifact, options: EncodeArtifactOptions): string | Uint8Array;
 export function encodeArtifact(artifact: ModelArtifact, options: EncodeArtifactOptions): string | Uint8Array {
     if (options?.format === "json") return encodeJson(artifact, options);
     if (options?.format === "binary") return encodeBinary(artifact, options);
     const format: unknown = (options as { format?: unknown } | undefined)?.format;
-    throw new ValidationError(`encodeArtifact: options.format must be "json" or "binary", got ${describeValue(format)}`);
+    throw new ValidationError(
+        `encodeArtifact: options.format must be "json" or "binary", got ${describeValue(format)}`,
+    );
 }
 
 function classifyText(firstChar: number, preview: string): ArtifactFormat {
@@ -102,8 +109,8 @@ function classifyText(firstChar: number, preview: string): ArtifactFormat {
     if (firstChar >= 0x30 && firstChar <= 0x39) return "legacy";
     if (firstChar === -1) throw new SerializationError("Unrecognized model format: input is empty");
     throw new SerializationError(
-        "Unrecognized model format: expected a binary model (0x89 \"ORION\"), JSON (\"{\"), or a legacy " +
-        `.onn file (starting with a digit); input starts with ${preview}`,
+        'Unrecognized model format: expected a binary model (0x89 "ORION"), JSON ("{"), or a legacy ' +
+            `.onn file (starting with a digit); input starts with ${preview}`,
     );
 }
 
