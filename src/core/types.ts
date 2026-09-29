@@ -12,8 +12,11 @@
 import type { Matrix } from "./matrix.js";
 import type { Random } from "./random.js";
 
-/** JSON-compatible value, used for configs that round-trip through serialization. */
-export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+/**
+ * JSON-compatible value, used for configs that round-trip through serialization.
+ * Object members may be `undefined` (dropped by JSON.stringify) so optional config fields nest cleanly.
+ */
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue | undefined };
 
 // ---------------------------------------------------------------------------------------------
 // Activations
