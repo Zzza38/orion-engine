@@ -15,7 +15,6 @@
  * @packageDocumentation
  */
 
-// ---- Building blocks: registries, optimizers, schedules --------------------------------------
 export { ACTIVATION_NAMES, getActivation } from "./activations.js";
 export type {
     Callback,
@@ -27,7 +26,6 @@ export type {
     ProgressLoggerOptions,
     ReduceLROnPlateauOptions,
 } from "./callbacks.js";
-// ---- Callbacks ------------------------------------------------------------------------------
 export {
     earlyStopping,
     formatEpoch,
@@ -38,7 +36,6 @@ export {
 } from "./callbacks.js";
 export { OrionError, SerializationError, ShapeError, TrainingError, ValidationError } from "./core/errors.js";
 export type { MatrixLike } from "./core/matrix.js";
-// ---- Math, randomness, errors ----------------------------------------------------------------
 export {
     add,
     addRowVector,
@@ -56,7 +53,6 @@ export {
     transpose,
 } from "./core/matrix.js";
 export { Random } from "./core/random.js";
-// ---- Contracts --------------------------------------------------------------------------------
 export type {
     Activation,
     ActivationConfig,
@@ -95,7 +91,6 @@ export type {
     TrainTestSplit,
     TrainTestSplitOptions,
 } from "./data.js";
-// ---- Data utilities -------------------------------------------------------------------------
 export { argmax, MinMaxScaler, oneHot, StandardScaler, shuffleTogether, trainTestSplit } from "./data.js";
 export { getInitializer, INITIALIZER_NAMES } from "./initializers.js";
 export type {
@@ -126,7 +121,6 @@ export type {
     LayerOptions,
     RegularizerOptions,
 } from "./layers/index.js";
-// ---- Layers ---------------------------------------------------------------------------------
 export {
     ActivationLayer,
     activation,
@@ -145,7 +139,6 @@ export {
 export { getLoss, LOSS_NAMES } from "./losses.js";
 export { getMetric, METRIC_NAMES } from "./metrics.js";
 export type { BatchOptions, CompileOptions, FitAsyncOptions, FitOptions, SequentialOptions } from "./model.js";
-// ---- Model ----------------------------------------------------------------------------------
 export { Sequential } from "./model.js";
 export type {
     AdagradOptions,
@@ -173,6 +166,5 @@ export {
     stepDecay,
 } from "./schedules.js";
 export type { DeserializeOptions, SerializeOptions } from "./serialization.js";
-// ---- Saving & loading -----------------------------------------------------------------------
 export { deserializeModel, serializeModel } from "./serialization.js";
 export { VERSION } from "./version.js";
