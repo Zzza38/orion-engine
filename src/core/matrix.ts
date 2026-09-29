@@ -38,7 +38,7 @@ export class Matrix {
         return m;
     }
 
-    /** Builds a matrix from rows of numbers. Throws on ragged or non-finite-number input. */
+    /** Builds a matrix from rows of numbers. Throws on ragged rows, non-number values and NaN. */
     static fromArray(rows: readonly (readonly number[])[]): Matrix {
         const rowCount = rows.length;
         const colCount = rowCount === 0 ? 0 : rows[0].length;
@@ -59,8 +59,27 @@ export class Matrix {
         return m;
     }
 
-    /** Builds a 1 x n row matrix from a vector. */
+    /** Builds a 1 x n row matrix from a vector. Throws on non-number entries (NaN is passed through). */
     static fromVector(values: readonly number[] | Float64Array): Matrix {
+        if (!(values instanceof Float64Array)) {
+            for (let i = 0; i < values.length; i++) {
+                const v: unknown = values[i];
+                if (typeof v !== "number") {
+                    // Typed-array rows would otherwise be coerced to NaN and read as one long sample.
+                    const hint =
+                        typeof v === "object" && v !== null
+                            ? "; rows must be plain number[] arrays (use Array.from(row)) or pass a Matrix"
+                            : "";
+                    const kind =
+                        typeof v === "object" && v !== null
+                            ? Object.prototype.toString.call(v)
+                            : typeof v === "string"
+                              ? JSON.stringify(v)
+                              : String(v);
+                    throw new ValidationError(`Non-numeric value at index ${i}: ${kind}${hint}`);
+                }
+            }
+        }
         return new Matrix(1, values.length, Float64Array.from(values));
     }
 
@@ -147,18 +166,35 @@ export function assertSameShape(a: Matrix, b: Matrix, op: string): void {
     }
 }
 
-/** out = a · b, where a is [m, k] and b is [k, n]. */
+/**
+ * Throws when `out` shares memory with an input: the products below write `out` while still
+ * reading their inputs, so an aliased buffer would silently produce garbage.
+ */
+function checkNoAlias(out: Matrix | undefined, a: Matrix, b: Matrix | null, op: string): void {
+    if (out === undefined) return;
+    if (overlaps(out.data, a.data) || (b !== null && overlaps(out.data, b.data))) {
+        throw new ValidationError(`${op}: the output buffer must not share memory with an input; pass a separate out`);
+    }
+}
+
+function overlaps(x: Float64Array, y: Float64Array): boolean {
+    if (x.buffer !== y.buffer || x.length === 0 || y.length === 0) return false;
+    return x.byteOffset < y.byteOffset + y.byteLength && y.byteOffset < x.byteOffset + x.byteLength;
+}
+
+/** out = a · b, where a is [m, k] and b is [k, n]. `out` must not share memory with `a` or `b`. */
 export function matmul(a: Matrix, b: Matrix, out?: Matrix): Matrix {
     if (a.cols !== b.rows) throw new ShapeError(`matmul: [${a.rows}, ${a.cols}] · [${b.rows}, ${b.cols}]`);
     const m = a.rows, k = a.cols, n = b.cols;
     const target = prepareOut(out, m, n, "matmul");
+    checkNoAlias(out, a, b, "matmul");
     const A = a.data, B = b.data, C = target.data;
     C.fill(0);
     for (let i = 0; i < m; i++) {
         const cRow = i * n;
         for (let p = 0; p < k; p++) {
+            // No shortcut for av === 0: 0 · NaN and 0 · Infinity must still propagate NaN.
             const av = A[i * k + p];
-            if (av === 0) continue;
             const bRow = p * n;
             for (let j = 0; j < n; j++) C[cRow + j] += av * B[bRow + j];
         }
@@ -166,18 +202,21 @@ export function matmul(a: Matrix, b: Matrix, out?: Matrix): Matrix {
     return target;
 }
 
-/** out = aᵀ · b, where a is [k, m] and b is [k, n]. Used for weight gradients (Xᵀ · dY). */
+/**
+ * out = aᵀ · b, where a is [k, m] and b is [k, n]. Used for weight gradients (Xᵀ · dY).
+ * `out` must not share memory with `a` or `b`.
+ */
 export function matmulTransposeA(a: Matrix, b: Matrix, out?: Matrix): Matrix {
     if (a.rows !== b.rows) throw new ShapeError(`matmulTransposeA: [${a.rows}, ${a.cols}]ᵀ · [${b.rows}, ${b.cols}]`);
     const k = a.rows, m = a.cols, n = b.cols;
     const target = prepareOut(out, m, n, "matmulTransposeA");
+    checkNoAlias(out, a, b, "matmulTransposeA");
     const A = a.data, B = b.data, C = target.data;
     C.fill(0);
     for (let p = 0; p < k; p++) {
         const aRow = p * m, bRow = p * n;
         for (let i = 0; i < m; i++) {
             const av = A[aRow + i];
-            if (av === 0) continue;
             const cRow = i * n;
             for (let j = 0; j < n; j++) C[cRow + j] += av * B[bRow + j];
         }
@@ -185,11 +224,15 @@ export function matmulTransposeA(a: Matrix, b: Matrix, out?: Matrix): Matrix {
     return target;
 }
 
-/** out = a · bᵀ, where a is [m, k] and b is [n, k]. Used for input gradients (dY · Wᵀ). */
+/**
+ * out = a · bᵀ, where a is [m, k] and b is [n, k]. Used for input gradients (dY · Wᵀ).
+ * `out` must not share memory with `a` or `b`.
+ */
 export function matmulTransposeB(a: Matrix, b: Matrix, out?: Matrix): Matrix {
     if (a.cols !== b.cols) throw new ShapeError(`matmulTransposeB: [${a.rows}, ${a.cols}] · [${b.rows}, ${b.cols}]ᵀ`);
     const m = a.rows, k = a.cols, n = b.rows;
     const target = prepareOut(out, m, n, "matmulTransposeB");
+    checkNoAlias(out, a, b, "matmulTransposeB");
     const A = a.data, B = b.data, C = target.data;
     for (let i = 0; i < m; i++) {
         const aRow = i * k;
@@ -203,9 +246,10 @@ export function matmulTransposeB(a: Matrix, b: Matrix, out?: Matrix): Matrix {
     return target;
 }
 
-/** out = aᵀ. */
+/** out = aᵀ. `out` must not share memory with `a`. */
 export function transpose(a: Matrix, out?: Matrix): Matrix {
     const target = prepareOut(out, a.cols, a.rows, "transpose");
+    checkNoAlias(out, a, null, "transpose");
     for (let r = 0; r < a.rows; r++) {
         for (let c = 0; c < a.cols; c++) target.data[c * a.rows + r] = a.data[r * a.cols + c];
     }
@@ -256,9 +300,13 @@ export function addRowVector(a: Matrix, v: Matrix | Float64Array, out?: Matrix):
     return target;
 }
 
-/** Sums over rows (the batch axis), producing a [1, cols] matrix. Used for bias gradients. */
+/**
+ * Sums over rows (the batch axis), producing a [1, cols] matrix. Used for bias gradients.
+ * `out` must not share memory with `a`.
+ */
 export function sumRows(a: Matrix, out?: Matrix): Matrix {
     const target = prepareOut(out, 1, a.cols, "sumRows");
+    checkNoAlias(out, a, null, "sumRows");
     target.data.fill(0);
     const cols = a.cols;
     for (let r = 0; r < a.rows; r++) {
@@ -268,9 +316,13 @@ export function sumRows(a: Matrix, out?: Matrix): Matrix {
     return target;
 }
 
-/** Gathers the given rows (in order) into a new [indices.length, cols] matrix. */
+/**
+ * Gathers the given rows (in order) into a new [indices.length, cols] matrix.
+ * `out` must not share memory with `a`.
+ */
 export function gatherRows(a: Matrix, indices: ArrayLike<number>, out?: Matrix): Matrix {
     const target = prepareOut(out, indices.length, a.cols, "gatherRows");
+    checkNoAlias(out, a, null, "gatherRows");
     const cols = a.cols;
     for (let i = 0; i < indices.length; i++) {
         const src = indices[i];

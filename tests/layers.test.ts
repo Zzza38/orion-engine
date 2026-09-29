@@ -80,6 +80,53 @@ describe("Dense", () => {
         });
     }
 
+    it("register-blocked kernels match naive products for every remainder shape (batch 0..17, sizes 1..17)", () => {
+        const fuzz = new Random(11);
+        const naive = (a: Matrix, b: Matrix, transposeA: boolean, transposeB: boolean): Matrix => {
+            const m = transposeA ? a.cols : a.rows,
+                k = transposeA ? a.rows : a.cols;
+            const n = transposeB ? b.rows : b.cols;
+            const out = new Matrix(m, n);
+            for (let i = 0; i < m; i++)
+                for (let j = 0; j < n; j++) {
+                    let s = 0;
+                    for (let p = 0; p < k; p++)
+                        s += (transposeA ? a.get(p, i) : a.get(i, p)) * (transposeB ? b.get(j, p) : b.get(p, j));
+                    out.set(i, j, s);
+                }
+            return out;
+        };
+        const close = (actual: Matrix, expected: Matrix, label: string) => {
+            assert.deepEqual(actual.shape, expected.shape, label);
+            for (let i = 0; i < actual.data.length; i++) {
+                assert.ok(Math.abs(actual.data[i] - expected.data[i]) <= 1e-12, `${label}[${i}]`);
+            }
+        };
+        for (let trial = 0; trial < 300; trial++) {
+            const rows = fuzz.int(18),
+                inputs = 1 + fuzz.int(17),
+                units = 1 + fuzz.int(17);
+            const useBias = trial % 3 !== 0;
+            const layer = new Dense({ units, useBias, biasInitializer: { name: "randomNormal", stddev: 1 } });
+            layer.build(inputs, fuzz.fork());
+            const x = randomMatrix(fuzz, rows, inputs);
+            const label = `rows ${rows}, inputs ${inputs}, units ${units}, bias ${useBias}`;
+            const expected = naive(x, layer.kernel.value, false, false);
+            if (useBias) expected.map((v, _r, c) => v + (layer.bias as Parameter).value.data[c], expected);
+            close(layer.forward(x, true), expected, `forward ${label}`);
+            const g = randomMatrix(fuzz, rows, units);
+            layer.kernel.grad.fill(99);
+            const dx = layer.backward(g);
+            close(layer.kernel.grad, naive(x, g, true, false), `dW ${label}`);
+            close(dx, naive(g, layer.kernel.value, false, true), `dx ${label}`);
+            if (useBias) {
+                const db = new Matrix(1, units);
+                for (let i = 0; i < g.data.length; i++) db.data[i % units] += g.data[i];
+                close((layer.bias as Parameter).grad, db, `db ${label}`);
+            }
+        }
+    });
+
     it("passes a gradient check with L1 + L2 kernel regularization", () => {
         const layer = built(new Dense({ units: 4, activation: "tanh", kernelRegularizer: { l1: 0.03, l2: 0.05 } }), 3);
         gradientCheck(layer, randomMatrix(rng, 5, 3), true, rng);

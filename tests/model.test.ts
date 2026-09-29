@@ -302,6 +302,52 @@ describe("Sequential: gradients", () => {
     }
 });
 
+describe("Sequential: fused softmax + categoricalCrossentropy with unnormalized targets", () => {
+    for (const standalone of [false, true]) {
+        it(`matches finite differences when target rows do not sum to 1 (${standalone ? "Activation layer head" : "Dense softmax head"})`, () => {
+            const rng = new Random(8);
+            const model = new Sequential({
+                inputSize: 3,
+                seed: 2,
+                layers: standalone
+                    ? [dense(4, "tanh"), dense(3), activation("softmax")]
+                    : [dense(4, "tanh"), dense(3, "softmax")],
+            });
+            model.compile({ loss: "cce", optimizer: { name: "sgd", learningRate: 0 } });
+            const x = Array.from({ length: 5 }, () => [rng.uniform(-1, 1), rng.uniform(-1, 1), rng.uniform(-1, 1)]);
+            // Multi-hot, all-zero and soft-count rows.
+            const y = [
+                [1, 1, 0],
+                [0, 0, 0],
+                [0.5, 0.2, 0.9],
+                [2, 0, 0],
+                [0, 0.3, 0],
+            ];
+            model.trainOnBatch(x, y);
+            const h = 1e-6;
+            const lossAt = () => model.evaluate(x, y, { batchSize: 5 }).loss;
+            for (const param of model.parameters()) {
+                const grad = param.grad.data.slice();
+                const values = param.value.data;
+                for (let i = 0; i < values.length; i++) {
+                    const original = values[i];
+                    values[i] = original + h;
+                    const plus = lossAt();
+                    values[i] = original - h;
+                    const minus = lossAt();
+                    values[i] = original;
+                    const numeric = (plus - minus) / (2 * h);
+                    const scale = Math.max(1, Math.abs(numeric), Math.abs(grad[i]));
+                    assert.ok(
+                        Math.abs(numeric - grad[i]) / scale < 1e-6,
+                        `${param.name}[${i}]: ${grad[i]} vs ${numeric}`,
+                    );
+                }
+            }
+        });
+    }
+});
+
 describe("Sequential: validation, logs and callbacks", () => {
     const { x, y } = randomData(new Random(8), 40, 2, 1);
 
@@ -450,6 +496,19 @@ describe("Sequential: validation, logs and callbacks", () => {
         );
     });
 
+    it("treats verbose: 0 as silent (like false), as in Keras", () => {
+        const lines: string[] = [];
+        const original = console.log;
+        console.log = (line: string) => void lines.push(line);
+        try {
+            regressionModel().fit(x, y, { epochs: 2, verbose: 0 });
+        } finally {
+            console.log = original;
+        }
+        assert.deepEqual(lines, []);
+        assert.throws(() => regressionModel().fit(x, y, { verbose: -1 }), /"verbose" must be a positive integer/);
+    });
+
     it("early stopping restores the weights of the best epoch", () => {
         const model = regressionModel();
         const script = [5, 4, 3, 3.5, 3.6, 3.7, 3.8, 3.9];
@@ -577,6 +636,47 @@ describe("Sequential: fitAsync", () => {
         assert.doesNotThrow(() => m.fit(x, y), "the flag is cleared after an error");
     });
 
+    it("is not left marked as training when yielding to the event loop fails", async () => {
+        const m = model();
+        const g = globalThis as { scheduler?: unknown };
+        const previous = g.scheduler;
+        g.scheduler = { yield: () => Promise.reject(new Error("yield failed")) };
+        try {
+            await assert.rejects(m.fitAsync(x, y, { epochs: 3, yieldEvery: 0 }), /yield failed/);
+        } finally {
+            if (previous === undefined) delete g.scheduler;
+            else g.scheduler = previous;
+        }
+        assert.doesNotThrow(() => m.fit(x, y), "the training flag is cleared");
+        await m.fitAsync(x, y, { epochs: 1, yieldEvery: 0 });
+    });
+
+    it("refuses compile() and add() from a callback instead of desynchronizing the loop", async () => {
+        // Before: recompiling mid-fit made trainStep use the new optimizer while callbacks
+        // (learningRateScheduler, reduceLROnPlateau) and logs.learningRate kept the old one.
+        const m = model();
+        assert.throws(
+            () =>
+                m.fit(x, y, {
+                    epochs: 2,
+                    onEpochEnd: () => void m.compile({ loss: "mse", optimizer: { name: "sgd", learningRate: 0.5 } }),
+                }),
+            (e: unknown) =>
+                e instanceof ValidationError &&
+                /compile\(\) cannot be called while the model is training/.test(e.message),
+        );
+        assert.equal(m.optimizer?.name, "adam", "the original optimizer is kept");
+        await assert.rejects(
+            m.fitAsync(x, y, { epochs: 2, onEpochEnd: () => void m.add(dense(2)) }),
+            /add\(\) cannot be called while the model is training/,
+        );
+        assert.equal(m.layers.length, 3);
+        // Both work again once training has ended.
+        m.compile({ loss: "mse", optimizer: "sgd" });
+        m.add(dense(1));
+        assert.equal(m.layers.length, 4);
+    });
+
     it("rejects invalid input asynchronously", async () => {
         await assert.rejects(model().fitAsync(x, y, { epochs: 0 }), /"epochs" must be a positive integer, got 0/);
         await assert.rejects(model().fitAsync(x, y, { signal: {} as AbortSignal }), /"signal" must be an AbortSignal/);
@@ -628,6 +728,59 @@ describe("Sequential: inference and evaluation", () => {
         const logs = model.evaluate(XOR_X, XOR_Y);
         assert.deepEqual(Object.keys(logs), ["loss", "accuracy"]);
         assert.equal(logs.loss, getLoss("bce").compute(Matrix.from(model.predict(XOR_X)), new Matrix(4, 1, XOR_Y)));
+    });
+
+    it('"accuracy" with a binaryCrossentropy loss is element-wise binary accuracy (multi-label outputs)', () => {
+        const make = () => {
+            const m = new Sequential({ inputSize: 2, seed: 1, layers: [dense(3, "sigmoid")] });
+            m.compile({ loss: "bce", metrics: ["accuracy", "binaryAccuracy", "categoricalAccuracy"] });
+            return m;
+        };
+        const x = [
+            [1, 2],
+            [3, 4],
+            [-1, 0.5],
+        ];
+        const y = [
+            [1, 1, 0],
+            [0, 1, 1],
+            [1, 0, 1],
+        ];
+        const model = make();
+        const logs = model.evaluate(x, y);
+        assert.notEqual(logs.binaryAccuracy, logs.categoricalAccuracy, "the data tells the two variants apart");
+        assert.equal(logs.accuracy, logs.binaryAccuracy);
+        // Survives clone() and a save/load round trip (which recompiles from the metric names).
+        assert.equal(model.clone().evaluate(x, y).accuracy, logs.binaryAccuracy);
+        assert.equal(Sequential.fromArtifact(model.toArtifact()).evaluate(x, y).accuracy, logs.binaryAccuracy);
+        // Other losses keep the shape-based choice.
+        const softmax = new Sequential({ inputSize: 2, seed: 1, layers: [dense(3, "softmax")] });
+        softmax.compile({ loss: "cce", metrics: ["accuracy", "categoricalAccuracy"] });
+        const cce = softmax.evaluate(x, [
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 0, 1],
+        ]);
+        assert.equal(cce.accuracy, cce.categoricalAccuracy);
+    });
+
+    it("trainOnBatch rejects an empty batch without corrupting batch-norm statistics", () => {
+        const model = new Sequential({
+            inputSize: 2,
+            seed: 1,
+            layers: [dense(3), batchNormalization(), dense(1, "sigmoid")],
+        });
+        model.compile({ loss: "bce" });
+        assert.throws(() => model.trainOnBatch(new Matrix(0, 2), new Matrix(0, 1)), /trainOnBatch: x has no samples/);
+        const bn = model.layers[1];
+        bn.forward(new Matrix(0, 3), true);
+        for (const w of model.getWeights()) {
+            assert.ok(
+                Array.from(w.data).every(Number.isFinite),
+                `${w.name} stays finite: ${Array.from(w.data).join(", ")}`,
+            );
+        }
+        assert.ok(Number.isFinite(model.trainOnBatch(XOR_X, XOR_Y).loss));
     });
 });
 
@@ -828,6 +981,13 @@ describe("Sequential: actionable errors", () => {
             /x contains NaN at row 0, column 0/,
         );
         assert.throws(() => model().fit(XOR_X, XOR_Y, { validationSplit: 0.1 }), /leaves 0 for validation/);
+        assert.throws(() => model().fit([], []), /fit: x has no samples/);
+        assert.throws(() => model().evaluate([], []), /evaluate: x has no samples/);
+        assert.throws(() => model().trainOnBatch([], []), /trainOnBatch: x has no samples/);
+        assert.throws(
+            () => model().fit(XOR_X, XOR_Y, { validationData: [[], []] }),
+            /fit: validationData x has no samples/,
+        );
         assert.throws(() => new Sequential({ seed: 1.5 }), /"seed" must be an integer/);
         assert.throws(() => model().compile({ loss: "mse", metrics: ["accuracy", "accuracy"] }), /listed twice/);
         assert.throws(() => model().toArtifact.call(new Sequential({ layers: [dense(1)] })), /not built yet/);

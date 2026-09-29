@@ -268,6 +268,24 @@ describe("losses: fused gradients", () => {
         for (let i = 0; i < p.data.length; i++) assertClose(fused.data[i], (p.data[i] - soft.data[i]) / 5);
     });
 
+    it("softmax + categoricalCrossentropy stays exact when target rows do not sum to 1", () => {
+        const z = randomMatrix(rng, 5, 4, -3, 3);
+        // Unnormalized soft targets, multi-hot rows, an all-zero row and a row summing to 2.
+        checkFused("softmax", getLoss("cce"), z, randomMatrix(rng, 5, 4, 0, 1));
+        const multiHot = Matrix.fromArray([
+            [1, 1, 0, 0],
+            [0, 0, 0, 0],
+            [0, 1, 1, 1],
+            [2, 0, 0, 0],
+            [0.2, 0, 0, 0.3],
+        ]);
+        checkFused("softmax", getLoss("cce"), z, multiHot);
+        // A 1-unit softmax is constant (always 1), so its gradient must be exactly 0.
+        const one = getActivation("softmax").forward(randomMatrix(rng, 3, 1, -2, 2));
+        const fused = getLoss("cce").fusedGradient?.("softmax", one, Matrix.fromArray([[1], [0], [0.5]]));
+        assert.deepEqual(Array.from(fused?.data ?? []), [0, 0, 0]);
+    });
+
     it("softmax + sparseCategoricalCrossentropy = (p - onehot(y)) / batch", () => {
         const z = randomMatrix(rng, 5, 4, -3, 3);
         const indices = randomIndices(rng, 5, 4);

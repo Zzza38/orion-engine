@@ -91,7 +91,7 @@ export interface FitOptions {
     callbacks?: Callback[];
     /** Shorthand for a callback with only `onEpochEnd`. */
     onEpochEnd?: (epoch: number, logs: Logs) => void;
-    /** Log progress: `true` every epoch, a number N every N epochs. Default false. */
+    /** Log progress: `true` every epoch, a number N every N epochs (`0`, like `false`, is silent). Default false. */
     verbose?: boolean | number;
 }
 
@@ -266,6 +266,7 @@ export class Sequential {
      * model.add(dense(16, "relu")).add(dropout(0.2)).add(dense(1));
      */
     add(layer: Layer): this {
+        this.requireNotTraining("add");
         if (!isLayer(layer)) {
             throw new ValidationError(
                 `add() expects a layer, e.g. model.add(dense(8, "relu")), got ${describeValue(layer)}`,
@@ -322,12 +323,19 @@ export class Sequential {
 
     /**
      * Sets the loss, optimizer and metrics used by `fit`, `trainOnBatch` and `evaluate`.
-     * Compiling again replaces them (and resets optimizer state).
+     * Compiling again replaces them: an optimizer name or config creates a fresh optimizer (new
+     * state), while an `Optimizer` instance is used as-is, keeping its state. Cannot be called
+     * while `fit`/`fitAsync` is running (e.g. from a callback).
+     *
+     * `"accuracy"` picks its variant from the shapes (see `getMetric`), except that with a
+     * binaryCrossentropy loss it is always the per-element binary accuracy, so multi-label models
+     * (several sigmoid units) get a meaningful value.
      * @returns this, for chaining.
      * @example
      * model.compile({ loss: "scce", optimizer: { name: "adam", learningRate: 0.01 }, metrics: ["accuracy"] });
      */
     compile(options: CompileOptions): this {
+        this.requireNotTraining("compile");
         checkOptions("compile", options, ["loss", "optimizer", "metrics"]);
         if (options === undefined || options.loss === undefined) {
             throw new ValidationError(
@@ -342,7 +350,14 @@ export class Sequential {
                 `compile: "metrics" must be an array, e.g. ["accuracy"], got ${describeValue(metricIds)}`,
             );
         }
-        const metrics = metricIds.map((id) => getMetric(id));
+        const binaryLoss = loss.name === "binaryCrossentropy";
+        const metrics = metricIds.map((id) =>
+            // Keras semantics: with a binary cross-entropy loss, "accuracy" is element-wise binary
+            // accuracy. The shape-based pick would use argmax for multi-unit (multi-label) outputs.
+            id === "accuracy" && binaryLoss
+                ? { name: id, compute: getMetric("binaryAccuracy").compute }
+                : getMetric(id),
+        );
         const seen = new Set<string>();
         for (const metric of metrics) {
             if (seen.has(metric.name)) throw new ValidationError(`compile: metric "${metric.name}" is listed twice`);
@@ -406,27 +421,34 @@ export class Sequential {
         signal?.throwIfAborted();
         const plan = this.prepareFit("fitAsync", x, y, options as FitOptions, FIT_ASYNC_KEYS, true, signal);
         const loop = this.trainLoop(plan);
-        let lastYield = now();
-        let step = loop.next();
-        while (!step.done) {
-            const value = step.value;
-            if (value === TICK) {
-                if (now() - lastYield >= yieldEvery) {
-                    await yieldToEventLoop();
-                    lastYield = now();
+        try {
+            let lastYield = now();
+            let step = loop.next();
+            while (!step.done) {
+                const value = step.value;
+                if (value === TICK) {
+                    if (now() - lastYield >= yieldEvery) {
+                        await yieldToEventLoop();
+                        lastYield = now();
+                    }
+                    step = loop.next();
+                    continue;
+                }
+                try {
+                    await value;
+                } catch (error) {
+                    step = loop.throw(error);
+                    continue;
                 }
                 step = loop.next();
-                continue;
             }
-            try {
-                await value;
-            } catch (error) {
-                step = loop.throw(error);
-                continue;
-            }
-            step = loop.next();
+            return step.value;
+        } finally {
+            // If this driver fails outside the loop (e.g. yielding to the event loop rejects), close
+            // the suspended loop so its cleanup runs and the model is not left marked as training.
+            // A no-op when the loop already finished or threw.
+            loop.return(undefined as unknown as History);
         }
-        return step.value;
     }
 
     /**
@@ -438,6 +460,7 @@ export class Sequential {
     trainOnBatch(x: MatrixLike, y: MatrixLike): Logs {
         this.requireCompiled("trainOnBatch");
         const input = this.toInputs(x, "trainOnBatch", "x");
+        if (input.rows === 0) throw new ValidationError("trainOnBatch: x has no samples");
         const target = this.toTargets(y, input.rows, "trainOnBatch", "y");
         checkFinite(input, "trainOnBatch", "x");
         checkFinite(target, "trainOnBatch", "y");
@@ -756,6 +779,20 @@ export class Sequential {
         }
     }
 
+    /**
+     * Throws while fit/fitAsync is running. Changing the layers or recompiling mid-training would
+     * desynchronize the training loop (its buffers, validated targets, and the optimizer that
+     * callbacks and the logs see).
+     */
+    private requireNotTraining(where: string): void {
+        if (this.isTraining) {
+            throw new ValidationError(
+                `${where}() cannot be called while the model is training (e.g. from a callback). ` +
+                    `Stop training first (ctx.stopTraining()), then call ${where}() and fit again`,
+            );
+        }
+    }
+
     /** Converts inputs to a Matrix, builds the model on first use, and checks the feature count. */
     private toInputs(x: MatrixLike, where: string, label: string): Matrix {
         if (this.layerList.length === 0) {
@@ -764,6 +801,8 @@ export class Sequential {
             );
         }
         const matrix = toMatrix(x, where, label);
+        // `[]` becomes a 0 x 0 matrix; report the missing samples, not a feature-count mismatch.
+        if (matrix.rows === 0 && Array.isArray(x)) throw new ValidationError(`${where}: ${label} has no samples`);
         if (this.builtInputSize === undefined) {
             if (matrix.cols === 0) throw new ShapeError(`${where}: ${label} has no features`);
             this.build(matrix.cols);
@@ -923,7 +962,8 @@ export class Sequential {
             callbacks.push({ onEpochEnd: (epoch, logs) => fn(epoch, logs) });
         }
         const verbose = options.verbose;
-        if (verbose !== undefined && verbose !== false) {
+        // `verbose: 0` means silent, as in Keras.
+        if (verbose !== undefined && verbose !== false && verbose !== 0) {
             if (verbose === true) callbacks.push(progressLogger());
             else callbacks.push(progressLogger({ every: positiveInteger(where, "verbose", verbose) }));
         }

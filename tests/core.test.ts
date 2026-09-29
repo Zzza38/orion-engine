@@ -71,6 +71,23 @@ describe("Matrix", () => {
         assert.throws(() => new Matrix(-1, 2), ShapeError);
     });
 
+    it("rejects non-number entries in a flat vector instead of coercing them (typed-array rows, strings)", () => {
+        const typedRows = [Float64Array.of(1, 2), Float64Array.of(3, 4)] as unknown as number[];
+        assert.throws(
+            () => Matrix.from(typedRows),
+            (e: unknown) =>
+                e instanceof ValidationError &&
+                /index 0: \[object Float64Array\]; rows must be plain number\[\] arrays/.test(e.message),
+        );
+        assert.throws(() => Matrix.from([1, "2"] as unknown as number[]), /Non-numeric value at index 1: "2"/);
+        assert.throws(() => Matrix.fromVector([1, undefined] as unknown as number[]), /index 1: undefined/);
+        // Edge cases that stay valid.
+        assert.deepEqual(Matrix.from([]).shape, [0, 0]);
+        assert.deepEqual(Matrix.from([[]]).shape, [1, 0]);
+        assert.ok(Number.isNaN(Matrix.from([Number.NaN]).data[0]), "NaN is left for callers to report");
+        assert.deepEqual(Array.from(Matrix.fromVector(Float64Array.of(1, 2)).data), [1, 2]);
+    });
+
     it("clone is independent", () => {
         const m = Matrix.fromArray([[1, 2]]);
         const c = m.clone();
@@ -105,6 +122,80 @@ describe("matrix ops", () => {
             assertClose(matmulTransposeA(transpose(a), b).toArray(), expected);
             assertClose(matmulTransposeB(a, transpose(b)).toArray(), expected);
         }
+    });
+
+    it("matmul variants match a naive product for every shape 0..17 (including k = 0)", () => {
+        const fuzz = new Random(5);
+        for (let trial = 0; trial < 400; trial++) {
+            const m = fuzz.int(18),
+                k = fuzz.int(18),
+                n = fuzz.int(18);
+            const a = randomMatrix(fuzz, m, k);
+            const b = randomMatrix(fuzz, k, n);
+            const expected = new Matrix(m, n);
+            for (let i = 0; i < m; i++)
+                for (let j = 0; j < n; j++) {
+                    let s = 0;
+                    for (let p = 0; p < k; p++) s += a.get(i, p) * b.get(p, j);
+                    expected.set(i, j, s);
+                }
+            const label = `[${m}, ${k}] · [${k}, ${n}]`;
+            for (const [name, result] of [
+                ["matmul", matmul(a, b, Matrix.filled(m, n, 7))],
+                ["matmulTransposeA", matmulTransposeA(transpose(a), b, Matrix.filled(m, n, 7))],
+                ["matmulTransposeB", matmulTransposeB(a, transpose(b), Matrix.filled(m, n, 7))],
+            ] as const) {
+                assert.deepEqual(result.shape, [m, n], `${name} ${label}`);
+                for (let i = 0; i < result.data.length; i++) {
+                    assert.ok(Math.abs(result.data[i] - expected.data[i]) <= 1e-12, `${name} ${label} [${i}]`);
+                }
+            }
+        }
+    });
+
+    it("matmul variants propagate NaN and Infinity even through zero entries (IEEE 0 · NaN = NaN)", () => {
+        const zeros = Matrix.fromArray([[0, 1]]);
+        const withNaN = new Matrix(2, 1, [Number.NaN, 1]);
+        const withInf = new Matrix(2, 1, [Number.POSITIVE_INFINITY, 1]);
+        assert.ok(Number.isNaN(matmul(zeros, withNaN).data[0]));
+        assert.ok(Number.isNaN(matmul(zeros, withInf).data[0]));
+        assert.ok(Number.isNaN(matmulTransposeA(transpose(zeros), withNaN).data[0]));
+        assert.ok(Number.isNaN(matmulTransposeB(zeros, transpose(withInf)).data[0]));
+    });
+
+    it("rejects an output buffer that aliases an input instead of returning garbage", () => {
+        const a = Matrix.fromArray([
+            [1, 2],
+            [3, 4],
+        ]);
+        const aliasing = /must not share memory with an input/;
+        assert.throws(() => matmul(a, a.clone(), a), aliasing);
+        assert.throws(() => matmul(a.clone(), a, a), aliasing);
+        assert.throws(() => matmulTransposeA(a, a.clone(), a), aliasing);
+        assert.throws(() => matmulTransposeB(a, a.clone(), a), aliasing);
+        assert.throws(() => transpose(a, a), aliasing);
+        assert.throws(() => gatherRows(a, [1, 0], a), aliasing);
+        // Overlapping views of one buffer count too.
+        const buffer = new Float64Array(8);
+        const lower = new Matrix(2, 2, buffer.subarray(0, 4));
+        const shifted = new Matrix(2, 2, buffer.subarray(2, 6));
+        assert.throws(() => matmul(lower, a, shifted), aliasing);
+        const disjoint = new Matrix(2, 2, buffer.subarray(4, 8));
+        assert.deepEqual(
+            matmul(
+                Matrix.fromArray([
+                    [1, 0],
+                    [0, 1],
+                ]),
+                a,
+                disjoint,
+            ).toArray(),
+            a.toArray(),
+        );
+        assert.deepEqual(a.toArray(), [
+            [1, 2],
+            [3, 4],
+        ]);
     });
 
     it("matmul reuses an output buffer and overwrites stale values", () => {

@@ -124,6 +124,28 @@ describe("StandardScaler", () => {
         assert.equal(scaler.std[2], 1);
     });
 
+    it("treats constant features whose mean has rounding error as constant (no blow-up)", () => {
+        // mean([0.1, 0.1, 0.1]) = 0.10000000000000002, so the naive population std is ~1.4e-17.
+        const scaler = new StandardScaler();
+        const scaled = scaler.fitTransform([
+            [0.1, 1, 0.7],
+            [0.1, 2, 0.7],
+            [0.1, 3, 0.7],
+        ]);
+        assert.deepEqual(
+            scaled.map((row) => [row[0], row[2]]),
+            [
+                [0, 0],
+                [0, 0],
+                [0, 0],
+            ],
+        );
+        assert.deepEqual([scaler.std[0], scaler.std[2]], [1, 1]);
+        // Unseen values stay on the original scale instead of being multiplied by ~7e16.
+        const [x] = scaler.transform([[0.2, 2, 0.7]]);
+        assert.ok(Math.abs(x[0] - 0.1) < 1e-12, `got ${x[0]}`);
+    });
+
     it("inverts, mirrors the input kind, and round-trips through JSON", () => {
         const scaler = new StandardScaler().fit(data);
         const back = scaler.inverseTransform(scaler.transform(data));

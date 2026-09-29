@@ -327,9 +327,23 @@ export class StandardScaler extends Scaler {
             }
         }
         const std = new Float64Array(n);
+        const rows = m.rows;
         for (let c = 0; c < n; c++) {
-            const s = Math.sqrt(variance[c] / m.rows);
-            std[c] = s > 0 ? s : 1;
+            const v = variance[c] / rows;
+            // A constant feature can still get a tiny non-zero variance from rounding in the mean
+            // (e.g. [0.1, 0.1, 0.1]); dividing by its ~1e-17 "std" would blow values up. Treat any
+            // variance within the rounding error bound (as scikit-learn does) as zero.
+            const roundingBound = rows * Number.EPSILON * v + (rows * mean[c] * Number.EPSILON) ** 2;
+            if (v > roundingBound) {
+                std[c] = Math.sqrt(v);
+                continue;
+            }
+            std[c] = 1;
+            // Exactly constant: use the value itself as the mean so it transforms to exactly 0.
+            const first = m.data[c];
+            let constant = true;
+            for (let r = 1; r < rows && constant; r++) constant = m.data[r * n + c] === first;
+            if (constant) mean[c] = first;
         }
         this.meanValues = mean;
         this.stdValues = std;

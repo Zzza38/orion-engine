@@ -269,14 +269,24 @@ class CategoricalCrossentropy extends BaseLoss {
         return result;
     }
 
-    /** softmax + categoricalCrossentropy → (p - y) / batch. Assumes each target row sums to 1. */
+    /**
+     * softmax + categoricalCrossentropy → (p·Σy - y) / batch, per row. This is (p - y) / batch for
+     * the usual targets whose rows sum to 1 (one-hot, label-smoothed), and stays exact for rows
+     * that do not (soft counts, multi-hot targets).
+     */
     override fusedGradient(activation: ActivationName, prediction: Matrix, target: Matrix, out?: Matrix): Matrix | null {
         if (activation !== "softmax") return null;
         checkDense("categoricalCrossentropy.fusedGradient", prediction, target);
         const result = prepareOut(out, prediction, "categoricalCrossentropy.fusedGradient");
         const P = prediction.data, Y = target.data, G = result.data;
+        const cols = prediction.cols;
         const s = 1 / prediction.rows;
-        for (let i = 0; i < P.length; i++) G[i] = s * (P[i] - Y[i]);
+        for (let base = 0; base < P.length; base += cols) {
+            const end = base + cols;
+            let total = 0;
+            for (let i = base; i < end; i++) total += Y[i];
+            for (let i = base; i < end; i++) G[i] = s * (P[i] * total - Y[i]);
+        }
         return result;
     }
 }

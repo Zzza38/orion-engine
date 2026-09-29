@@ -84,7 +84,8 @@ export interface Loss {
     gradient(prediction: Matrix, target: Matrix, out?: Matrix): Matrix;
     /**
      * Optional closed-form dL/dz for (output activation, loss) pairs that simplify, e.g.
-     * sigmoid + binaryCrossentropy or softmax + categoricalCrossentropy → (p - y) / batch.
+     * sigmoid + binaryCrossentropy → (p - y) / (batch·units), or softmax + categoricalCrossentropy
+     * → (p - y) / batch for one-hot targets.
      * Returns null when the pair has no fused form. Models should prefer this when available:
      * it is faster and numerically stabler.
      */

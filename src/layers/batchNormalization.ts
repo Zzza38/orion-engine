@@ -136,8 +136,9 @@ export class BatchNormalization extends BaseLayer {
             invStd = this.invStd;
         const eps = this.epsilon;
 
-        if (training) {
-            // Two-pass batch mean and biased variance, vectorized over features.
+        if (training && rows > 0) {
+            // Two-pass batch mean and biased variance, vectorized over features. (An empty batch
+            // has no statistics: it must not turn the moving averages into NaN.)
             mean.fill(0);
             for (let r = 0; r < rows; r++) {
                 const base = r * n;
